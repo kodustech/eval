@@ -36,6 +36,8 @@ export interface EvaluationResult {
   matchedSuggestions: number;
   accuracy: number;
   detailedAnalysis: string;
+  repetitions?: number;
+  runDetails?: EvaluationResult[];
 }
 
 export interface SuggestionMatch {
@@ -61,6 +63,7 @@ export interface EvaluatorConfig {
   evaluatorLLM: LLMConfig;
   testCases: string[]; // Array of example names
   outputDir?: string; // Diretório de saída para resultados
+  reviewerPromptPath?: string; // caminho para template customizado
 }
 
 export interface EvaluatorResponse {

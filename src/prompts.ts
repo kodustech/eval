@@ -168,10 +168,8 @@ Responda no seguinte formato JSON:
 Retorne APENAS o JSON, sem texto adicional.
 `;
 
-export function createReviewerPrompt(file: string, diff: string): string {
-  return REVIEWER_PROMPT_TEMPLATE
-    .replace('{file}', file)
-    .replace('{diff}', diff);
+export function createReviewerPrompt(file: string, diff: string, template: string = REVIEWER_PROMPT_TEMPLATE): string {
+  return template.replace('{file}', file).replace('{diff}', diff);
 }
 
 export function createEvaluatorPrompt(groundTruth: string, llmResponse: string): string {

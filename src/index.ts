@@ -7,12 +7,21 @@ import { EvaluatorConfig } from './types';
 // --- parse CLI args simples
 const cliArgs = process.argv.slice(2);
 let limit: number | undefined;
+let repetitions = 1;
+let customPromptPath: string | undefined;
 
 const limitFlags = ['--limit', '-l'];
+const repFlags = ['--reps', '-r'];
+const promptFlags = ['--prompt', '-p'];
 for (let i = 0; i < cliArgs.length; i++) {
   if (limitFlags.includes(cliArgs[i]) && cliArgs[i + 1]) {
     limit = parseInt(cliArgs[i + 1], 10);
-    break;
+  }
+  if (repFlags.includes(cliArgs[i]) && cliArgs[i + 1]) {
+    repetitions = Math.max(1, parseInt(cliArgs[i + 1], 10));
+  }
+  if (promptFlags.includes(cliArgs[i]) && cliArgs[i + 1]) {
+    customPromptPath = cliArgs[i + 1];
   }
 }
 
@@ -46,6 +55,7 @@ async function main() {
       },
       testCases: [], // será preenchido dinamicamente
       outputDir,
+      reviewerPromptPath: customPromptPath,
     };
 
     console.log('🚀 Iniciando Code Review Evaluator');
@@ -64,7 +74,7 @@ async function main() {
     }
 
     // Executa avaliação
-    const results = await evaluator.evaluateAllTestCases(selected);
+    const results = await evaluator.evaluateAllTestCases(selected, repetitions);
     
     // Salva resultados
     console.log('\n💾 Salvando resultados...');
@@ -73,7 +83,7 @@ async function main() {
       JSON.stringify(results, null, 2)
     );
     
-    console.log('✅ Resultados salvos em evaluation_results.json');
+    console.log(`✅ Resultados salvos em evaluation_results.json (repetitions=${repetitions})`);
     
   } catch (error) {
     console.error('❌ Erro:', error);

@@ -5,6 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
+    "build:dataset": "ts-node scripts/build_dataset.ts",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
     "test": "npm run build && node dist/test.js",

@@ -1,7 +1,7 @@
 import { BaseLLM } from './llm/BaseLLM';
 import { LLMFactory } from './llm/LLMFactory';
 import { TestCaseLoader } from './TestCaseLoader';
-import { createReviewerPrompt, createEvaluatorPrompt } from './prompts';
+import { createReviewerPrompt, createEvaluatorPrompt, REVIEWER_PROMPT_TEMPLATE } from './prompts';
 import { 
   EvaluatorConfig, 
   TestCase, 
@@ -19,6 +19,7 @@ export class Evaluator {
   private evaluatorLLM: BaseLLM;
   private testCaseLoader: TestCaseLoader;
   private outputDir: string;
+  private reviewerTemplate: string;
 
   constructor(config: EvaluatorConfig) {
     this.reviewerLLM = LLMFactory.createLLM(config.reviewerLLM);
@@ -29,17 +30,38 @@ export class Evaluator {
 
     // Garante que o diretório base exista
     fs.mkdirSync(this.outputDir, { recursive: true });
+
+    // Carrega template customizado se fornecido
+    if (config.reviewerPromptPath && fs.existsSync(config.reviewerPromptPath)) {
+      this.reviewerTemplate = fs.readFileSync(config.reviewerPromptPath, 'utf8');
+    } else {
+      this.reviewerTemplate = REVIEWER_PROMPT_TEMPLATE;
+    }
   }
 
   async evaluateSingleTestCase(testCase: TestCase): Promise<EvaluationResult> {
+    return this.runSingleEvaluation(testCase, undefined);
+  }
+
+  /**
+   * Executa N repetições de um mesmo test case. Se repetitions for 1 (ou não definido)
+   * o comportamento é idêntico ao atual.
+   */
+  private async runSingleEvaluation(
+    testCase: TestCase,
+    repetitionIndex?: number
+  ): Promise<EvaluationResult> {
     try {
-      console.log(`\n🔍 Avaliando: ${testCase.name}`);
+      const repLabel = repetitionIndex !== undefined ? ` (run ${repetitionIndex + 1})` : '';
+      console.log(`\n🔍 Avaliando: ${testCase.name}${repLabel}`);
 
       // 1. Gera o prompt para review
-      const reviewPrompt = createReviewerPrompt(testCase.file, testCase.diff);
+      const reviewPrompt = createReviewerPrompt(testCase.file, testCase.diff, this.reviewerTemplate);
       
       // Pasta específica do teste
-      const testOutputDir = path.join(this.outputDir, testCase.name);
+      const testOutputDir = repetitionIndex !== undefined
+        ? path.join(this.outputDir, testCase.name, `run_${repetitionIndex + 1}`)
+        : path.join(this.outputDir, testCase.name);
       fs.mkdirSync(testOutputDir, { recursive: true });
 
       // Salva o prompt enviado
@@ -72,7 +94,11 @@ export class Evaluator {
     }
   }
 
-  async evaluateAllTestCases(testCaseNames?: string[]): Promise<EvaluationResult[]> {
+  /**
+   * Avalia todos os test cases, podendo repetir cada um várias vezes.
+   * @param repetitions número de execuções por test case (>=1)
+   */
+  async evaluateAllTestCases(testCaseNames?: string[], repetitions = 1): Promise<EvaluationResult[]> {
     let testCases: TestCase[];
     
     if (testCaseNames && testCaseNames.length > 0) {
@@ -94,12 +120,33 @@ export class Evaluator {
     const results: EvaluationResult[] = [];
     
     for (const testCase of testCases) {
-      try {
-        const result = await this.evaluateSingleTestCase(testCase);
-        results.push(result);
-      } catch (error) {
-        console.error(`❌ Falha em ${testCase.name}:`, error);
+      const runDetails: EvaluationResult[] = [];
+      for (let i = 0; i < repetitions; i++) {
+        try {
+          const runResult = await this.runSingleEvaluation(testCase, repetitions > 1 ? i : undefined);
+          runDetails.push(runResult);
+        } catch (error) {
+          console.error(`❌ Falha em ${testCase.name} (run ${i + 1}):`, error);
+        }
       }
+
+      if (runDetails.length === 0) continue;
+
+      // Calcula médias
+      const avgAccuracy = runDetails.reduce((s, r) => s + r.accuracy, 0) / runDetails.length;
+      const totalSug = runDetails.reduce((s, r) => s + r.totalSuggestions, 0) / runDetails.length;
+      const matchedSug = runDetails.reduce((s, r) => s + r.matchedSuggestions, 0) / runDetails.length;
+
+      const aggregated: EvaluationResult = {
+        ...runDetails[0], // copia campos base
+        accuracy: avgAccuracy,
+        matchedSuggestions: matchedSug,
+        totalSuggestions: totalSug,
+        repetitions: runDetails.length,
+        runDetails
+      };
+
+      results.push(aggregated);
     }
 
     this.printSummary(results);
