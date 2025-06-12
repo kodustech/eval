@@ -55,6 +55,33 @@ Running will:
 4. Print per-case accuracy and a global summary
 5. Write `evaluation_results.json` with the raw data
 
+### 📦 Generate LangSmith Dataset
+
+To create a JSONL dataset compatible with [LangSmith](https://smith.langchain.com/):
+
+```bash
+# build examples ➜ output/dataset.jsonl
+npm run build:dataset
+```
+
+The script scans every folder inside `examples/`, grabs the code, diff, and ground-truth suggestions, then writes one JSON-encoded line per example to `output/dataset.jsonl`.
+
+Each line follows this schema:
+
+```jsonc
+{
+  "inputs": {
+    "code": "<original source file>",
+    "diff": "<unified diff patch>"
+  },
+  "outputs": {
+    "suggestions": [{ /* reviewer issues as JSON */ }]
+  }
+}
+```
+
+You can now upload the resulting `dataset.jsonl` to LangSmith for prompt-quality tracking or further experimentation.
+
 ---
 
 ## ⚙️ Configuration
