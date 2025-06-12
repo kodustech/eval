@@ -52,7 +52,7 @@ export class Evaluator {
     repetitionIndex?: number
   ): Promise<EvaluationResult> {
     try {
-      const repLabel = repetitionIndex !== undefined ? ` (run ${repetitionIndex + 1})` : '';
+      const repLabel = repetitionIndex !== undefined ? ` (execução ${repetitionIndex + 1})` : '';
       console.log(`\n🔍 Avaliando: ${testCase.name}${repLabel}`);
 
       // 1. Gera o prompt para review
@@ -60,7 +60,7 @@ export class Evaluator {
       
       // Pasta específica do teste
       const testOutputDir = repetitionIndex !== undefined
-        ? path.join(this.outputDir, testCase.name, `run_${repetitionIndex + 1}`)
+        ? path.join(this.outputDir, testCase.name, `exec_${repetitionIndex + 1}`)
         : path.join(this.outputDir, testCase.name);
       fs.mkdirSync(testOutputDir, { recursive: true });
 
@@ -126,7 +126,7 @@ export class Evaluator {
           const runResult = await this.runSingleEvaluation(testCase, repetitions > 1 ? i : undefined);
           runDetails.push(runResult);
         } catch (error) {
-          console.error(`❌ Falha em ${testCase.name} (run ${i + 1}):`, error);
+          console.error(`❌ Falha em ${testCase.name} (execução ${i + 1}):`, error);
         }
       }
 

@@ -4,28 +4,9 @@ A lightweight TypeScript framework that checks whether your **prompt-engineered 
 
 The project loads sample code, asks an LLM to review it, compares the answer with an expected JSON, and returns an accuracy score – all with one command.
 
+> **Note** All example folders ship with **synthetic snippets** purposely crafted to mimic real-world bugs. They are **not** excerpts from client projects. Their only goal is to stress-test the review workflow and make it easy to iterate on prompts/metrics.
+
 ---
-
-## 🌍 Repository Layout
-
-```
-.
-├─ examples/               # Ground-truth samples (one folder per scenario)
-│   ├─ api_request_manager/
-│   │   ├─ file.js         # Original, buggy code
-│   │   ├─ diff.txt        # Proposed changes (shown to the reviewer LLM)
-│   │   └─ suggestions.json# Canonical analysis (ground truth)
-│   └─ …                   # 6 more sample folders
-├─ src/
-│   ├─ llm/                # Vendor-specific wrappers (Gemini, OpenAI, Claude)
-│   ├─ prompts.ts          # Prompt templates (reviewer & evaluator)
-│   ├─ TestCaseLoader.ts   # Loads / parses the examples
-│   ├─ Evaluator.ts        # Orchestrates the whole flow
-│   ├─ index.ts            # CLI entry point (npm start / npm run dev)
-│   └─ types.ts            # Strongly-typed data contracts
-├─ evaluation_results.json # Generated after a run (accuracy report)
-└─ package.json            # Scripts & dependencies
-```
 
 ### Test-case folder structure
 
@@ -44,7 +25,7 @@ Each **example** is a sub-directory inside `examples/` and **must** contain exac
 ## 🚀 Quick Start
 
 ```bash
-# 1 – Install deps
+# 1 – install dependencies
 npm install
 
 # 2 – Provide API keys (.env in project root)
@@ -55,9 +36,17 @@ ANTHROPIC_API_KEY=…
 # 3 – Run full evaluation (build + exec)
 npm start
 
-# 4 – Dev mode (no build, ts-node)
-npm run dev
+# dev mode with flags
+npm run dev -- --reps 3 --prompt ./prompts/my_reviewer.md
 ```
+
+### CLI flags
+
+| flag | shortcut | default | description |
+|------|----------|---------|-------------|
+| `--limit` | `-l` | all | Run only the first *N* examples |
+| `--reps`  | `-r` | 1 | How many times to run each example (results averaged) |
+| `--prompt`| `-p` | internal template | Path to a **custom reviewer prompt**. Must contain the placeholders `{file}` and `{diff}` |
 
 Running will:
 1. Detect every folder in `examples/`
@@ -99,18 +88,6 @@ Changing `provider` automatically switches to the right SDK thanks to `LLMFactor
 
 ## 🧠 How It Works
 
-```mermaid
-graph TD;
-  A[TestCaseLoader] -->|reads| B(file.js & diff.txt)
-  A --> C(suggestions.json)
-  B & C --> D(createReviewerPrompt)
-  D --> E(Reviewer LLM)
-  E --> F(parse LLM JSON)
-  F & C --> G(createEvaluatorPrompt)
-  G --> H(Evaluator LLM)
-  H --> I(parse evaluation JSON)
-  I --> J(print & write results)
-```
 
 1. **TestCaseLoader** reads each example and returns a typed object.
 2. **Reviewer Prompt** (see `prompts.ts`) asks the first LLM to produce a JSON array of issues.
@@ -149,9 +126,21 @@ graph TD;
 
 ## ➕ Adding New Examples
 
-1. Create a new folder under `examples/`: `your_feature/`
-2. Add `file.js`, `diff.txt`, `suggestions.json` following the same format.
-3. Run `npm start` – the loader auto-discovers the new folder.
+The dataset is intentionally minimal. Feel free to add more synthetic scenarios to cover edge cases we miss today:
+
+1. Create `examples/<your_case>/`.
+2. Drop `file.js`, `diff.txt`, `suggestions.json`.
+3. Run `npm start` or `npm run dev` to see the impact.
+
+---
+
+## 🏷️ Project Scope
+
+This repo **validates the review pipeline itself** – it is **not** a linting tool nor aims for full code-quality coverage. The objective is to make sure a prompt-engineered reviewer catches the *same* issues we have in our ground truth so we can:
+
+1. Experiment with different prompt styles quickly (pass a new file with `--prompt`).
+2. Benchmark LLM versions/providers side-by-side.
+3. Gradually expand the dataset with tougher cases and measure progress.
 
 ---
 

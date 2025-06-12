@@ -84,6 +84,7 @@ async function main() {
     );
     
     console.log(`✅ Resultados salvos em evaluation_results.json (repetitions=${repetitions})`);
+    console.log(`📑 Execuções por teste: ${repetitions}`);
     
   } catch (error) {
     console.error('❌ Erro:', error);
