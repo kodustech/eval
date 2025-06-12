@@ -1,0 +1,135 @@
+## file: 'utils/APIRequestManager.js'
+
+@@ -10,6 +10,11 @@
+     this.pendingRequests = new Map();
+     this.requestInterceptors = [];
+     this.responseInterceptors = [];
++    this.rateLimiter = {
++      requests: [],
++      maxRequests: options.rateLimit || 100,
++      window: options.rateLimitWindow || 60000
++    };
+   }
+ 
+   addRequestInterceptor(interceptor) {
+@@ -33,15 +38,25 @@
+       }
+     }
+ 
+-    // Deduplicate concurrent identical requests
+     if (this.pendingRequests.has(cacheKey)) {
+       return this.pendingRequests.get(cacheKey);
+     }
+ 
++    if (!this.checkRateLimit()) {
++      throw new Error('Rate limit exceeded');
++    }
++
+     const requestPromise = this.executeRequest(method, url, options);
+     this.pendingRequests.set(cacheKey, requestPromise);
+ 
+-    const response = await requestPromise;
+-    this.pendingRequests.delete(cacheKey);
++    try {
++      const response = await requestPromise;
++      
++      if (method === 'GET' && options.cache !== false) {
++        this.setCache(cacheKey, response, options.cacheTTL);
++      }
++      
++      return response;
++    } finally {
++      this.pendingRequests.delete(cacheKey);
++    }
+-
+-    if (method === 'GET' && options.cache !== false) {
+-      this.setCache(cacheKey, response, options.cacheTTL);
+-    }
+-
+-    return response;
+   }
+ 
+@@ -74,7 +89,12 @@
+       url += `?${params}`;
+     }
+ 
+-    // Apply request interceptors
++    for (const interceptor of this.requestInterceptors) {
++      await interceptor(config);
++    }
++
++    const controller = new AbortController();
++    const timeoutId = setTimeout(() => controller.abort(), config.timeout);
++
+     try {
+-      const response = await fetch(url, config);
++      const response = await fetch(url, {
++        ...config,
++        signal: controller.signal
++      });
++
++      clearTimeout(timeoutId);
++
+       const data = await response.json();
+ 
+@@ -97,14 +117,23 @@
+         headers: response.headers,
+         ok: response.ok
+       };
+ 
++      for (const interceptor of this.responseInterceptors) {
++        await interceptor(result);
++      }
++
+       if (!response.ok) {
+         throw new HTTPError(response.status, data);
+       }
+ 
++      this.recordRequest();
+       return result;
+ 
+     } catch (error) {
++      if (error.name === 'AbortError') {
++        throw new Error('Request timeout');
++      }
++
+       if (retryCount < this.maxRetries && this.shouldRetry(error)) {
+-        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
++        const delay = Math.pow(2, retryCount) * 1000;
++        await new Promise(resolve => setTimeout(resolve, delay));
+         return this.executeRequest(method, url, options, retryCount + 1);
+       }
+@@ -121,6 +150,24 @@
+     return error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT';
+   }
+ 
++  checkRateLimit() {
++    const now = Date.now();
++    const windowStart = now - this.rateLimiter.window;
++    
++    this.rateLimiter.requests = this.rateLimiter.requests.filter(
++      time => time > windowStart
++    );
++
++    return this.rateLimiter.requests.length < this.rateLimiter.maxRequests;
++  }
++
++  recordRequest() {
++    this.rateLimiter.requests.push(Date.now());
++  }
++
+   getFromCache(key) {
+     const cached = this.cache.get(key);
+     
+@@ -145,10 +192,10 @@
+       expiresAt: Date.now() + ttl
+     });
+ 
+-    // Simple LRU: remove oldest when cache is too large
+     if (this.cache.size > 1000) {
+-      const oldestKey = this.cache.keys().next().value;
+-      this.cache.delete(oldestKey);
++      const firstKey = this.cache.keys().next().value;
++      this.cache.delete(firstKey);
+     }
+   } 

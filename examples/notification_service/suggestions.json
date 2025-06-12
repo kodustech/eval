@@ -1,0 +1,27 @@
+{
+  "overallSummary": "Este PR implementa um serviço de notificações com suporte a múltiplos canais, filas e retry. Foram identificados dois problemas críticos: o processQueue não é chamado quando notificações falhadas são re-adicionadas à fila, e o unsubscribe closure pode acessar dados desatualizados após o usuário ser removido.",
+  "codeSuggestions": [
+    {
+      "relevantFile": "services/NotificationService.js",
+      "language": "javascript",
+      "suggestionContent": "Quando uma notificação falha e é re-adicionada à fila no setTimeout, o código não verifica se processing ainda é false. Se o processamento terminou antes do setTimeout executar, a notificação ficará na fila indefinidamente sem ser processada, pois processQueue não será chamado novamente.",
+      "existingCode": "if (notification.attempts < this.retryAttempts) {\n  setTimeout(() => {\n    this.queue.push(notification);\n  }, this.retryDelay * notification.attempts);\n}",
+      "improvedCode": "if (notification.attempts < this.retryAttempts) {\n  setTimeout(() => {\n    this.queue.push(notification);\n    if (!this.processing) {\n      this.processQueue();\n    }\n  }, this.retryDelay * notification.attempts);\n}",
+      "oneSentenceSummary": "Chame processQueue após re-adicionar notificações falhadas à fila se não estiver processando",
+      "relevantLinesStart": 59,
+      "relevantLinesEnd": 63,
+      "label": "potential_error"
+    },
+    {
+      "relevantFile": "services/NotificationService.js",
+      "language": "javascript",
+      "suggestionContent": "A função de unsubscribe retornada captura userChannels por referência. Se o usuário for completamente removido via unsubscribeUser(), userChannels não existirá mais em this.subscribers, mas a closure ainda tentará acessá-lo. Isso causa um erro quando alguém tenta chamar a função de unsubscribe após o usuário ser removido.",
+      "existingCode": "return () => {\n  const callbacks = userChannels.get(channel);\n  const index = callbacks.indexOf(callback);\n  if (index > -1) {\n    callbacks.splice(index, 1);\n  }\n};",
+      "improvedCode": "return () => {\n  const currentUserChannels = this.subscribers.get(userId);\n  if (!currentUserChannels) {\n    return;\n  }\n  const callbacks = currentUserChannels.get(channel);\n  if (callbacks) {\n    const index = callbacks.indexOf(callback);\n    if (index > -1) {\n      callbacks.splice(index, 1);\n    }\n  }\n};",
+      "oneSentenceSummary": "Verifique se o usuário ainda existe antes de tentar remover callbacks no unsubscribe",
+      "relevantLinesStart": 22,
+      "relevantLinesEnd": 28,
+      "label": "potential_error"
+    }
+  ]
+} 

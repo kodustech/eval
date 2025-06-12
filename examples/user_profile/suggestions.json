@@ -1,0 +1,38 @@
+{
+  "overallSummary": "Este PR modifica o componente UserProfile para usar PATCH ao invés de PUT e adiciona um indicador de loading. Foram identificados três problemas: o setOriginalProfile está sendo chamado com response.data que pode conter apenas campos parciais, o handleCancel não valida se originalProfile existe, e a validação de mudanças usando JSON.stringify pode falhar com propriedades em ordem diferente.",
+  "codeSuggestions": [
+    {
+      "relevantFile": "components/UserProfile.jsx",
+      "language": "javascript",
+      "suggestionContent": "Ao usar PATCH, o servidor geralmente retorna apenas os campos atualizados, não o objeto completo. Definir originalProfile com response.data parcial quebrará futuras comparações e o handleCancel restaurará dados incompletos. É necessário mesclar a resposta com o estado atual ou garantir que o servidor retorne o objeto completo.",
+      "existingCode": "const response = await api.patch(`/users/${user.id}/profile`, updates);\n\nsetOriginalProfile(response.data);\nupdateUser(response.data);",
+      "improvedCode": "const response = await api.patch(`/users/${user.id}/profile`, updates);\n\n// Merge the response with current profile to ensure complete data\nconst updatedProfile = { ...profile, ...response.data };\nsetOriginalProfile(updatedProfile);\nsetProfile(updatedProfile);\nupdateUser(updatedProfile);",
+      "oneSentenceSummary": "Mescle a resposta do PATCH com o perfil atual para evitar perda de dados",
+      "relevantLinesStart": 125,
+      "relevantLinesEnd": 128,
+      "label": "potential_error"
+    },
+    {
+      "relevantFile": "components/UserProfile.jsx",
+      "language": "javascript",
+      "suggestionContent": "O método handleCancel tenta restaurar originalProfile sem verificar se ele existe. Se o usuário clicar em Cancel antes do perfil carregar completamente, setProfile(originalProfile) definirá o perfil como null, quebrando todos os inputs do formulário.",
+      "existingCode": "const handleCancel = () => {\n  setProfile(originalProfile);\n  setErrors({});\n};",
+      "improvedCode": "const handleCancel = () => {\n  if (originalProfile) {\n    setProfile(originalProfile);\n    setErrors({});\n  }\n};",
+      "oneSentenceSummary": "Verifique se originalProfile existe antes de restaurar no handleCancel",
+      "relevantLinesStart": 139,
+      "relevantLinesEnd": 142,
+      "label": "potential_error"
+    },
+    {
+      "relevantFile": "components/UserProfile.jsx",
+      "language": "javascript",
+      "suggestionContent": "Usar JSON.stringify para comparar objetos pode retornar false positivos se as propriedades estiverem em ordem diferente. Além disso, comparar notifications com JSON.stringify é redundante já que o objeto completo já está sendo comparado. Isso pode fazer o usuário pensar que há mudanças quando não há.",
+      "existingCode": "const hasChanges = () => {\n  if (!originalProfile) return false;\n  \n  const currentStr = JSON.stringify(profile);\n  const originalStr = JSON.stringify(originalProfile);\n  \n  return currentStr !== originalStr;\n};",
+      "improvedCode": "const hasChanges = () => {\n  if (!originalProfile) return false;\n  \n  return (\n    profile.name !== originalProfile.name ||\n    profile.email !== originalProfile.email ||\n    profile.phone !== originalProfile.phone ||\n    profile.bio !== originalProfile.bio ||\n    profile.notifications.email !== originalProfile.notifications.email ||\n    profile.notifications.sms !== originalProfile.notifications.sms ||\n    profile.notifications.push !== originalProfile.notifications.push\n  );\n};",
+      "oneSentenceSummary": "Compare campos individualmente ao invés de usar JSON.stringify para detectar mudanças",
+      "relevantLinesStart": 93,
+      "relevantLinesEnd": 100,
+      "label": "potential_error"
+    }
+  ]
+} 

@@ -1,4 +1,3 @@
-bugjs/.env
-bugjs/venv/
-bugjs/datasets/
+.env
+output/
 .DS_Store

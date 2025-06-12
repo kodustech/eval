@@ -1,0 +1,27 @@
+{
+  "overallSummary": "Este PR introduz um serviço de cache com suporte a TTL, eviction e memoização. Foram identificados dois problemas importantes: o método set sempre reseta o contador de acessos para 0 mesmo para chaves existentes, e o timer de limpeza não é cancelado quando a instância é destruída, causando memory leak.",
+  "codeSuggestions": [
+    {
+      "relevantFile": "utils/CacheService.js",
+      "language": "javascript",
+      "suggestionContent": "O método `set` sempre reseta o contador de acessos para 0, mesmo quando está atualizando uma chave existente. Isso quebra completamente a lógica de LRU (Least Recently Used), pois itens frequentemente atualizados sempre terão contador 0 e serão os primeiros a serem removidos, independentemente de quantas vezes foram acessados.",
+      "existingCode": "this.cache.set(key, {\n  value,\n  expiresAt,\n  createdAt: Date.now()\n});\n\nthis.accessCount.set(key, 0);",
+      "improvedCode": "this.cache.set(key, {\n  value,\n  expiresAt,\n  createdAt: Date.now()\n});\n\n// Preserve access count for existing keys\nif (!this.accessCount.has(key)) {\n  this.accessCount.set(key, 0);\n}",
+      "oneSentenceSummary": "Preserve o contador de acessos ao atualizar chaves existentes no cache",
+      "relevantLinesStart": 17,
+      "relevantLinesEnd": 23,
+      "label": "potential_error"
+    },
+    {
+      "relevantFile": "utils/CacheService.js",
+      "language": "javascript",
+      "suggestionContent": "O `setInterval` em `startCleanupTimer` nunca é cancelado, criando um memory leak. Se múltiplas instâncias de CacheService forem criadas, cada uma terá seu próprio timer rodando indefinidamente, mesmo após a instância não ser mais usada. Isso pode degradar significativamente a performance da aplicação ao longo do tempo.",
+      "existingCode": "startCleanupTimer() {\n  setInterval(() => {\n    const now = Date.now();\n    \n    for (const [key, item] of this.cache.entries()) {\n      if (now > item.expiresAt) {\n        this.cache.delete(key);\n        this.accessCount.delete(key);\n      }\n    }\n  }, 60000);\n}",
+      "improvedCode": "startCleanupTimer() {\n  this.cleanupTimer = setInterval(() => {\n    const now = Date.now();\n    \n    for (const [key, item] of this.cache.entries()) {\n      if (now > item.expiresAt) {\n        this.cache.delete(key);\n        this.accessCount.delete(key);\n      }\n    }\n  }, 60000);\n}\n\ndestroy() {\n  if (this.cleanupTimer) {\n    clearInterval(this.cleanupTimer);\n  }\n  this.clear();\n}",
+      "oneSentenceSummary": "Armazene referência do timer e adicione método destroy para prevenir memory leak",
+      "relevantLinesStart": 82,
+      "relevantLinesEnd": 93,
+      "label": "potential_error"
+    }
+  ]
+} 

@@ -1,0 +1,140 @@
+## file: 'services/NotificationService.js'
+
+@@ -0,0 +1,135 @@
+__new hunk__
+1 +class NotificationService {
+2 +  constructor() {
+3 +    this.subscribers = new Map();
+4 +    this.queue = [];
+5 +    this.processing = false;
+6 +    this.retryAttempts = 3;
+7 +    this.retryDelay = 1000;
+8 +  }
+9 +
+10 +  subscribe(userId, channel, callback) {
+11 +    if (!this.subscribers.has(userId)) {
+12 +      this.subscribers.set(userId, new Map());
+13 +    }
+14 +    
+15 +    const userChannels = this.subscribers.get(userId);
+16 +    if (!userChannels.has(channel)) {
+17 +      userChannels.set(channel, []);
+18 +    }
+19 +    
+20 +    userChannels.get(channel).push(callback);
+21 +    
+22 +    return () => {
+23 +      const callbacks = userChannels.get(channel);
+24 +      const index = callbacks.indexOf(callback);
+25 +      if (index > -1) {
+26 +        callbacks.splice(index, 1);
+27 +      }
+28 +    };
+29 +  }
+30 +
+31 +  async notify(userId, channel, data) {
+32 +    const notification = {
+33 +      id: Date.now() + Math.random(),
+34 +      userId,
+35 +      channel,
+36 +      data,
+37 +      timestamp: new Date(),
+38 +      attempts: 0
+39 +    };
+40 +
+41 +    this.queue.push(notification);
+42 +    
+43 +    if (!this.processing) {
+44 +      this.processQueue();
+45 +    }
+46 +  }
+47 +
+48 +  async processQueue() {
+49 +    this.processing = true;
+50 +
+51 +    while (this.queue.length > 0) {
+52 +      const notification = this.queue.shift();
+53 +      
+54 +      try {
+55 +        await this.deliverNotification(notification);
+56 +      } catch (error) {
+57 +        notification.attempts++;
+58 +        
+59 +        if (notification.attempts < this.retryAttempts) {
+60 +          setTimeout(() => {
+61 +            this.queue.push(notification);
+62 +          }, this.retryDelay * notification.attempts);
+63 +        } else {
+64 +          console.error(`Failed to deliver notification after ${this.retryAttempts} attempts:`, error);
+65 +        }
+66 +      }
+67 +    }
+68 +
+69 +    this.processing = false;
+70 +  }
+71 +
+72 +  async deliverNotification(notification) {
+73 +    const userSubscribers = this.subscribers.get(notification.userId);
+74 +    
+75 +    if (!userSubscribers || !userSubscribers.has(notification.channel)) {
+76 +      return;
+77 +    }
+78 +
+79 +    const callbacks = userSubscribers.get(notification.channel);
+80 +    
+81 +    const promises = callbacks.map(callback => {
+82 +      return new Promise((resolve, reject) => {
+83 +        try {
+84 +          const result = callback(notification);
+85 +          if (result instanceof Promise) {
+86 +            result.then(resolve).catch(reject);
+87 +          } else {
+88 +            resolve(result);
+89 +          }
+90 +        } catch (error) {
+91 +          reject(error);
+92 +        }
+93 +      });
+94 +    });
+95 +
+96 +    await Promise.all(promises);
+97 +  }
+98 +
+99 +  broadcast(channel, data) {
+100 +    const notificationPromises = [];
+101 +    
+102 +    for (const [userId, channels] of this.subscribers) {
+103 +      if (channels.has(channel)) {
+104 +        notificationPromises.push(this.notify(userId, channel, data));
+105 +      }
+106 +    }
+107 +    
+108 +    return Promise.all(notificationPromises);
+109 +  }
+110 +
+111 +  unsubscribeUser(userId) {
+112 +    return this.subscribers.delete(userId);
+113 +  }
+114 +
+115 +  getSubscriberCount(channel) {
+116 +    let count = 0;
+117 +    
+118 +    for (const [userId, channels] of this.subscribers) {
+119 +      if (channels.has(channel)) {
+120 +        count += channels.get(channel).length;
+121 +      }
+122 +    }
+123 +    
+124 +    return count;
+125 +  }
+126 +
+127 +  getQueueSize() {
+128 +    return this.queue.length;
+129 +  }
+130 +
+131 +  clearQueue() {
+132 +    this.queue = [];
+133 +  }
+134 +}
+135 +
+136 +module.exports = NotificationService; 

@@ -1,0 +1,38 @@
+{
+  "overallSummary": "Este PR adiciona rate limiting, request timeout com AbortController e melhora o retry logic. Foram identificados três problemas: recordRequest() é chamado apenas em requisições bem-sucedidas permitindo abuse do rate limit, o timeout não é cancelado em caso de erro antes do abort, e a construção da URL com params pode resultar em dupla interrogação.",
+  "codeSuggestions": [
+    {
+      "relevantFile": "utils/APIRequestManager.js",
+      "language": "javascript",
+      "suggestionContent": "O recordRequest() só é chamado quando a requisição é bem-sucedida. Isso permite que um atacante faça requisições inválidas infinitamente sem ser limitado pelo rate limiter, pois requisições que falham não são contabilizadas. O rate limit deve contar todas as tentativas, não apenas sucessos.",
+      "existingCode": "if (!response.ok) {\n  throw new HTTPError(response.status, data);\n}\n\nthis.recordRequest();\nreturn result;",
+      "improvedCode": "this.recordRequest(); // Record all attempts, not just successful ones\n\nif (!response.ok) {\n  throw new HTTPError(response.status, data);\n}\n\nreturn result;",
+      "oneSentenceSummary": "Mova recordRequest() para antes da verificação de erro para contabilizar todas as requisições",
+      "relevantLinesStart": 110,
+      "relevantLinesEnd": 115,
+      "label": "potential_error"
+    },
+    {
+      "relevantFile": "utils/APIRequestManager.js",
+      "language": "javascript",
+      "suggestionContent": "Se o fetch falhar antes do timeout (por exemplo, erro de rede), o clearTimeout nunca é chamado, deixando o timer ativo. Isso pode causar abort em uma requisição já finalizada e acumular timers não limpos na memória.",
+      "existingCode": "const controller = new AbortController();\nconst timeoutId = setTimeout(() => controller.abort(), config.timeout);\n\ntry {\n  const response = await fetch(url, {\n    ...config,\n    signal: controller.signal\n  });\n\n  clearTimeout(timeoutId);",
+      "improvedCode": "const controller = new AbortController();\nconst timeoutId = setTimeout(() => controller.abort(), config.timeout);\n\ntry {\n  const response = await fetch(url, {\n    ...config,\n    signal: controller.signal\n  });\n\n  clearTimeout(timeoutId);",
+      "oneSentenceSummary": "Adicione clearTimeout no bloco finally para garantir limpeza do timer em todos os casos",
+      "relevantLinesStart": 86,
+      "relevantLinesEnd": 94,
+      "label": "potential_error"
+    },
+    {
+      "relevantFile": "utils/APIRequestManager.js",
+      "language": "javascript",
+      "suggestionContent": "A URL é construída concatenando params diretamente, mas não verifica se a URL já contém query parameters. Se o endpoint já tiver '?', isso resultará em uma URL inválida como 'api.com/users?id=1?name=test'. É necessário verificar se já existe '?' na URL.",
+      "existingCode": "if (options.params) {\n  const params = new URLSearchParams(options.params);\n  url += `?${params}`;\n}",
+      "improvedCode": "if (options.params) {\n  const params = new URLSearchParams(options.params);\n  const separator = url.includes('?') ? '&' : '?';\n  url += `${separator}${params}`;\n}",
+      "oneSentenceSummary": "Verifique se a URL já contém '?' antes de adicionar query parameters",
+      "relevantLinesStart": 77,
+      "relevantLinesEnd": 80,
+      "label": "potential_error"
+    }
+  ]
+} 

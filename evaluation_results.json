@@ -1,0 +1,445 @@
+[
+  {
+    "testCase": "api_request_manager",
+    "overallMatch": false,
+    "overallSimilarity": 10,
+    "suggestionMatches": [
+      {
+        "groundTruth": {
+          "relevantFile": "utils/APIRequestManager.js",
+          "language": "javascript",
+          "suggestionContent": "O recordRequest() só é chamado quando a requisição é bem-sucedida. Isso permite que um atacante faça requisições inválidas infinitamente sem ser limitado pelo rate limiter, pois requisições que falham não são contabilizadas. O rate limit deve contar todas as tentativas, não apenas sucessos.",
+          "existingCode": "if (!response.ok) {\n  throw new HTTPError(response.status, data);\n}\n\nthis.recordRequest();\nreturn result;",
+          "improvedCode": "this.recordRequest(); // Record all attempts, not just successful ones\n\nif (!response.ok) {\n  throw new HTTPError(response.status, data);\n}\n\nreturn result;",
+          "oneSentenceSummary": "Mova recordRequest() para antes da verificação de erro para contabilizar todas as requisições",
+          "relevantLinesStart": 110,
+          "relevantLinesEnd": 115,
+          "label": "potential_error"
+        },
+        "llmResponse": null,
+        "isMatch": false,
+        "similarity": 0,
+        "reasoning": "Ground-truth aponta abuso de rate limit por registrar apenas requisições bem-sucedidas; o LLM não menciona nada sobre rate-limiting ou recordRequest."
+      },
+      {
+        "groundTruth": {
+          "relevantFile": "utils/APIRequestManager.js",
+          "language": "javascript",
+          "suggestionContent": "Se o fetch falhar antes do timeout (por exemplo, erro de rede), o clearTimeout nunca é chamado, deixando o timer ativo. Isso pode causar abort em uma requisição já finalizada e acumular timers não limpos na memória.",
+          "existingCode": "const controller = new AbortController();\nconst timeoutId = setTimeout(() => controller.abort(), config.timeout);\n\ntry {\n  const response = await fetch(url, {\n    ...config,\n    signal: controller.signal\n  });\n\n  clearTimeout(timeoutId);",
+          "improvedCode": "const controller = new AbortController();\nconst timeoutId = setTimeout(() => controller.abort(), config.timeout);\n\ntry {\n  const response = await fetch(url, {\n    ...config,\n    signal: controller.signal\n  });\n\n  clearTimeout(timeoutId);",
+          "oneSentenceSummary": "Adicione clearTimeout no bloco finally para garantir limpeza do timer em todos os casos",
+          "relevantLinesStart": 86,
+          "relevantLinesEnd": 94,
+          "label": "potential_error"
+        },
+        "llmResponse": null,
+        "isMatch": false,
+        "similarity": 0,
+        "reasoning": "Ground-truth identifica falta de clearTimeout no caso de erro; o LLM não discute timers nem AbortController."
+      },
+      {
+        "groundTruth": {
+          "relevantFile": "utils/APIRequestManager.js",
+          "language": "javascript",
+          "suggestionContent": "A URL é construída concatenando params diretamente, mas não verifica se a URL já contém query parameters. Se o endpoint já tiver '?', isso resultará em uma URL inválida como 'api.com/users?id=1?name=test'. É necessário verificar se já existe '?' na URL.",
+          "existingCode": "if (options.params) {\n  const params = new URLSearchParams(options.params);\n  url += `?${params}`;\n}",
+          "improvedCode": "if (options.params) {\n  const params = new URLSearchParams(options.params);\n  const separator = url.includes('?') ? '&' : '?';\n  url += `${separator}${params}`;\n}",
+          "oneSentenceSummary": "Verifique se a URL já contém '?' antes de adicionar query parameters",
+          "relevantLinesStart": 77,
+          "relevantLinesEnd": 80,
+          "label": "potential_error"
+        },
+        "llmResponse": null,
+        "isMatch": false,
+        "similarity": 0,
+        "reasoning": "Ground-truth trata de construção incorreta de URL com ‘?’ duplo; o LLM não aborda montagem de URL."
+      }
+    ],
+    "totalSuggestions": 3,
+    "matchedSuggestions": 0,
+    "accuracy": 0,
+    "detailedAnalysis": "O resumo do LLM foca exclusivamente em erro de parsing JSON em respostas de erro, enquanto o ground-truth lista problemas de rate limit, timers de timeout e concatenação de parâmetros na URL. Não há sobreposição de problemas identificados. Consequentemente, nenhuma das três sugestões esperadas é mencionada pela resposta do LLM e o conteúdo geral diverge do esperado."
+  },
+  {
+    "testCase": "cache_service",
+    "overallMatch": false,
+    "overallSimilarity": 50,
+    "suggestionMatches": [
+      {
+        "groundTruth": {
+          "relevantFile": "utils/CacheService.js",
+          "language": "javascript",
+          "suggestionContent": "O método `set` sempre reseta o contador de acessos para 0, mesmo quando está atualizando uma chave existente. Isso quebra completamente a lógica de LRU (Least Recently Used), pois itens frequentemente atualizados sempre terão contador 0 e serão os primeiros a serem removidos, independentemente de quantas vezes foram acessados.",
+          "existingCode": "this.cache.set(key, {\n  value,\n  expiresAt,\n  createdAt: Date.now()\n});\n\nthis.accessCount.set(key, 0);",
+          "improvedCode": "this.cache.set(key, {\n  value,\n  expiresAt,\n  createdAt: Date.now()\n});\n\n// Preserve access count for existing keys\nif (!this.accessCount.has(key)) {\n  this.accessCount.set(key, 0);\n}",
+          "oneSentenceSummary": "Preserve o contador de acessos ao atualizar chaves existentes no cache",
+          "relevantLinesStart": 17,
+          "relevantLinesEnd": 23,
+          "label": "potential_error"
+        },
+        "llmResponse": null,
+        "isMatch": false,
+        "similarity": 0,
+        "reasoning": "A ground truth aponta que o método `set` zera indevidamente o contador de acessos, quebrando a lógica LRU. A resposta do LLM não menciona nem discute esse problema, portanto não há correspondência."
+      },
+      {
+        "groundTruth": {
+          "relevantFile": "utils/CacheService.js",
+          "language": "javascript",
+          "suggestionContent": "O `setInterval` em `startCleanupTimer` nunca é cancelado, criando um memory leak. Se múltiplas instâncias de CacheService forem criadas, cada uma terá seu próprio timer rodando indefinidamente, mesmo após a instância não ser mais usada. Isso pode degradar significativamente a performance da aplicação ao longo do tempo.",
+          "existingCode": "startCleanupTimer() {\n  setInterval(() => {\n    const now = Date.now();\n    \n    for (const [key, item] of this.cache.entries()) {\n      if (now > item.expiresAt) {\n        this.cache.delete(key);\n        this.accessCount.delete(key);\n      }\n    }\n  }, 60000);\n}",
+          "improvedCode": "startCleanupTimer() {\n  this.cleanupTimer = setInterval(() => {\n    const now = Date.now();\n    \n    for (const [key, item] of this.cache.entries()) {\n      if (now > item.expiresAt) {\n        this.cache.delete(key);\n        this.accessCount.delete(key);\n      }\n    }\n  }, 60000);\n}\n\ndestroy() {\n  if (this.cleanupTimer) {\n    clearInterval(this.cleanupTimer);\n  }\n  this.clear();\n}",
+          "oneSentenceSummary": "Armazene referência do timer e adicione método destroy para prevenir memory leak",
+          "relevantLinesStart": 82,
+          "relevantLinesEnd": 93,
+          "label": "potential_error"
+        },
+        "llmResponse": {
+          "relevantFile": "utils/CacheService.js",
+          "language": "javascript",
+          "suggestionContent": "O `setInterval` no método `startCleanupTimer` cria um timer que executa indefinidamente, mesmo que a instância de `CacheService` não seja mais referenciada. Isso impede que o garbage collector libere a memória associada à instância, causando um vazamento de memória (memory leak). Para corrigir isso, o ID do intervalo deve ser armazenado e um método `destroy` deve ser adicionado para limpar o intervalo (`clearInterval`) quando a instância do cache não for mais necessária, garantindo a liberação adequada dos recursos.",
+          "existingCode": "class CacheService {\n  constructor(maxSize = 100, ttlMinutes = 60) {\n    this.cache = new Map();\n    this.maxSize = maxSize;\n    this.ttl = ttlMinutes * 60 * 1000;\n    this.accessCount = new Map();\n    this.startCleanupTimer();\n  }\n\n  // ... (outros métodos)\n\n  startCleanupTimer() {\n    setInterval(() => {\n      const now = Date.now();\n      \n      for (const [key, item] of this.cache.entries()) {\n        if (now > item.expiresAt) {\n          this.cache.delete(key);\n          this.accessCount.delete(key);\n        }\n      }\n    }, 60000);\n  }\n\n  // ... (outros métodos)\n}",
+          "improvedCode": "class CacheService {\n  constructor(maxSize = 100, ttlMinutes = 60) {\n    this.cache = new Map();\n    this.maxSize = maxSize;\n    this.ttl = ttlMinutes * 60 * 1000;\n    this.accessCount = new Map();\n    this.cleanupTimer = null; // Inicializa a propriedade do timer\n    this.startCleanupTimer();\n  }\n\n  // ... (outros métodos)\n\n  startCleanupTimer() {\n    this.cleanupTimer = setInterval(() => {\n      const now = Date.now();\n      \n      for (const [key, item] of this.cache.entries()) {\n        if (now > item.expiresAt) {\n          this.cache.delete(key);\n          this.accessCount.delete(key);\n        }\n      }\n    }, 60000);\n  }\n\n  /**\n   * Limpa o timer de cleanup para prevenir memory leaks.\n   */\n  destroy() {\n    if (this.cleanupTimer) {\n      clearInterval(this.cleanupTimer);\n      this.cleanupTimer = null;\n    }\n  }\n\n  // ... (outros métodos)\n}",
+          "oneSentenceSummary": "Um `setInterval` não gerenciado causa um vazamento de memória ao impedir que a instância do cache seja coletada como lixo.",
+          "relevantLinesStart": 2,
+          "relevantLinesEnd": 93,
+          "label": "potential_error"
+        },
+        "isMatch": true,
+        "similarity": 90,
+        "reasoning": "Ambos identificam que o `setInterval` criado em `startCleanupTimer` não é cancelado, gerando memory leak, e sugerem armazenar o ID do timer e limpar com um método `destroy`."
+      }
+    ],
+    "totalSuggestions": 2,
+    "matchedSuggestions": 1,
+    "accuracy": 50,
+    "detailedAnalysis": "O resumo do LLM captura apenas um dos dois problemas essenciais (memory leak), omitindo o erro de reinicialização do contador de acessos e adicionando outros problemas (NaN em getStats, memoize ineficiente). Das duas sugestões da ground truth, apenas a de memory leak foi reconhecida pelo LLM. Assim, há correspondência parcial, resultando em 50% de precisão."
+  },
+  {
+    "testCase": "notification_service",
+    "overallMatch": false,
+    "overallSimilarity": 60,
+    "suggestionMatches": [
+      {
+        "groundTruth": {
+          "relevantFile": "services/NotificationService.js",
+          "language": "javascript",
+          "suggestionContent": "Quando uma notificação falha e é re-adicionada à fila no setTimeout, o código não verifica se processing ainda é false. Se o processamento terminou antes do setTimeout executar, a notificação ficará na fila indefinidamente sem ser processada, pois processQueue não será chamado novamente.",
+          "existingCode": "if (notification.attempts < this.retryAttempts) {\n  setTimeout(() => {\n    this.queue.push(notification);\n  }, this.retryDelay * notification.attempts);\n}",
+          "improvedCode": "if (notification.attempts < this.retryAttempts) {\n  setTimeout(() => {\n    this.queue.push(notification);\n    if (!this.processing) {\n      this.processQueue();\n    }\n  }, this.retryDelay * notification.attempts);\n}",
+          "oneSentenceSummary": "Chame processQueue após re-adicionar notificações falhadas à fila se não estiver processando",
+          "relevantLinesStart": 59,
+          "relevantLinesEnd": 63,
+          "label": "potential_error"
+        },
+        "llmResponse": {
+          "relevantFile": "services/NotificationService.js",
+          "language": "javascript",
+          "suggestionContent": "O método `processQueue` usa `setTimeout` para agendar uma nova tentativa de uma notificação que falhou. No entanto, `setTimeout` é não-bloqueante, o que significa que o loop `while` continua a sua execução e termina quase que imediatamente, esvaziando a fila (que está sendo processada) e definindo `this.processing` como `false`. Quando o callback do `setTimeout` finalmente executa para adicionar a notificação de volta à fila, o processador já está inativo e a notificação ficará presa até que uma nova chamada a `notify` reative o processo. A solução é usar uma pausa assíncrona com `await` e uma `Promise` envolvendo `setTimeout`. Isso irá pausar o loop `while` pela duração necessária, mantendo a flag `this.processing` como `true` e garantindo que a lógica de retentativa funcione como esperado. Adicionalmente, a notificação com falha é reinserida no início da fila com `unshift` para que seja a próxima a ser processada após o atraso.",
+          "existingCode": "  async processQueue() {\n    this.processing = true;\n\n    while (this.queue.length > 0) {\n      const notification = this.queue.shift();\n      \n      try {\n        await this.deliverNotification(notification);\n      } catch (error) {\n        notification.attempts++;\n        \n        if (notification.attempts < this.retryAttempts) {\n          setTimeout(() => {\n            this.queue.push(notification);\n          }, this.retryDelay * notification.attempts);\n        } else {\n          console.error(`Failed to deliver notification after ${this.retryAttempts} attempts:`, error);\n        }\n      }\n    }\n\n    this.processing = false;\n  }",
+          "improvedCode": "  async processQueue() {\n    // A flag `processing` evita que múltiplas chamadas a `notify` iniciem loops de processamento concorrentes.\n    this.processing = true;\n\n    while (this.queue.length > 0) {\n      const notification = this.queue.shift();\n      \n      try {\n        await this.deliverNotification(notification);\n      } catch (error) {\n        notification.attempts++;\n        \n        if (notification.attempts < this.retryAttempts) {\n          const delay = this.retryDelay * notification.attempts;\n          // Usa `await` com uma Promise para pausar o loop de forma assíncrona.\n          // Isso corrige o bug onde o loop terminava antes da retentativa ser enfileirada.\n          await new Promise(resolve => setTimeout(resolve, delay));\n          // Adiciona a notificação de volta ao INÍCIO da fila para ser a próxima a ser tentada.\n          this.queue.unshift(notification);\n        } else {\n          console.error(`Failed to deliver notification ${notification.id} after ${this.retryAttempts} attempts:`, error);\n        }\n      }\n    }\n\n    this.processing = false;\n  }",
+          "oneSentenceSummary": "A lógica de retentativa da fila está com defeito, pois o uso de `setTimeout` não-bloqueante interrompe o ciclo de processamento, o que pode paralisar as notificações que falharam.",
+          "relevantLinesStart": 48,
+          "relevantLinesEnd": 70,
+          "label": "potential_error"
+        },
+        "isMatch": true,
+        "similarity": 85,
+        "reasoning": "Ambas as análises descrevem que uma notificação re-inserida via setTimeout pode ficar presa porque o processamento já terminou. A explicação e a correção diferem nos detalhes, mas o problema central (fila parada por causa do estado `processing`) é o mesmo."
+      },
+      {
+        "groundTruth": {
+          "relevantFile": "services/NotificationService.js",
+          "language": "javascript",
+          "suggestionContent": "A função de unsubscribe retornada captura userChannels por referência. Se o usuário for completamente removido via unsubscribeUser(), userChannels não existirá mais em this.subscribers, mas a closure ainda tentará acessá-lo. Isso causa um erro quando alguém tenta chamar a função de unsubscribe após o usuário ser removido.",
+          "existingCode": "return () => {\n  const callbacks = userChannels.get(channel);\n  const index = callbacks.indexOf(callback);\n  if (index > -1) {\n    callbacks.splice(index, 1);\n  }\n};",
+          "improvedCode": "return () => {\n  const currentUserChannels = this.subscribers.get(userId);\n  if (!currentUserChannels) {\n    return;\n  }\n  const callbacks = currentUserChannels.get(channel);\n  if (callbacks) {\n    const index = callbacks.indexOf(callback);\n    if (index > -1) {\n      callbacks.splice(index, 1);\n    }\n  }\n};",
+          "oneSentenceSummary": "Verifique se o usuário ainda existe antes de tentar remover callbacks no unsubscribe",
+          "relevantLinesStart": 22,
+          "relevantLinesEnd": 28,
+          "label": "potential_error"
+        },
+        "llmResponse": null,
+        "isMatch": false,
+        "similarity": 0,
+        "reasoning": "A ground truth aponta um possível erro de closure no método de unsubscribe, mas a resposta do LLM não menciona nada sobre isso."
+      }
+    ],
+    "totalSuggestions": 2,
+    "matchedSuggestions": 1,
+    "accuracy": 50,
+    "detailedAnalysis": "O resumo do LLM cobre apenas o bug de retentativa da fila, ignorando o problema de unsubscribe presente na ground truth, portanto não há correspondência total. Quanto às sugestões de código, apenas a primeira (fila de retry) coincide; a segunda não é tratada. Assim, a correspondência geral é parcial."
+  },
+  {
+    "testCase": "payment_service",
+    "overallMatch": false,
+    "overallSimilarity": 40,
+    "suggestionMatches": [
+      {
+        "groundTruth": {
+          "relevantFile": "services/paymentService.js",
+          "language": "javascript",
+          "suggestionContent": "O método `processPayment` tem um bug sutil mas crítico: quando `paymentResult.success` é false, o método não retorna nada (undefined). O código remove o orderId do Set de processamento mas não retorna o paymentResult, causando comportamento inconsistente para o chamador que espera sempre receber um resultado.",
+          "existingCode": "if (paymentResult.success) {\n  order.status = 'paid';\n  order.paymentId = paymentResult.transactionId;\n  await this.db.orders.update(order);\n  \n  await this.emailService.sendPaymentConfirmation(order.userEmail, {\n    orderId: order.id,\n    amount: amount,\n    transactionId: paymentResult.transactionId\n  });\n}\n\nthis.processingPayments.delete(orderId);\nreturn paymentResult;",
+          "improvedCode": "if (paymentResult.success) {\n  order.status = 'paid';\n  order.paymentId = paymentResult.transactionId;\n  await this.db.orders.update(order);\n  \n  await this.emailService.sendPaymentConfirmation(order.userEmail, {\n    orderId: order.id,\n    amount: amount,\n    transactionId: paymentResult.transactionId\n  });\n}\n\nthis.processingPayments.delete(orderId);\nreturn paymentResult;",
+          "oneSentenceSummary": "Garanta que paymentResult seja sempre retornado, independentemente do sucesso do pagamento",
+          "relevantLinesStart": 28,
+          "relevantLinesEnd": 41,
+          "label": "potential_error"
+        },
+        "llmResponse": null,
+        "isMatch": false,
+        "similarity": 10,
+        "reasoning": "Ground truth aponta falta de retorno em processPayment quando paymentResult.success é false. O LLM não menciona ausência de retorno; foca apenas em liberar o lock com finally. Problemas distintos."
+      },
+      {
+        "groundTruth": {
+          "relevantFile": "services/paymentService.js",
+          "language": "javascript",
+          "suggestionContent": "O método `validateCreditCard` não valida se o cartão contém apenas dígitos após remover espaços. Se a entrada contiver letras ou caracteres especiais, `parseInt()` retornará NaN, que quando somado resulta em NaN. Como `NaN % 10` também é NaN (que é falsy), a validação pode retornar false para entradas inválidas por coincidência, mas o comportamento é incorreto e imprevisível.",
+          "existingCode": "const cleaned = cardNumber.replace(/\\s/g, '');\n\nif (cleaned.length < 13 || cleaned.length > 19) {\n  return false;\n}\n\nlet sum = 0;\nlet isEven = false;\n\nfor (let i = cleaned.length - 1; i >= 0; i--) {\n  let digit = parseInt(cleaned[i]);",
+          "improvedCode": "const cleaned = cardNumber.replace(/\\s/g, '');\n\nif (!/^\\d+$/.test(cleaned)) {\n  return false;\n}\n\nif (cleaned.length < 13 || cleaned.length > 19) {\n  return false;\n}\n\nlet sum = 0;\nlet isEven = false;\n\nfor (let i = cleaned.length - 1; i >= 0; i--) {\n  let digit = parseInt(cleaned[i]);",
+          "oneSentenceSummary": "Adicione validação para garantir que o número do cartão contenha apenas dígitos",
+          "relevantLinesStart": 76,
+          "relevantLinesEnd": 87,
+          "label": "potential_error"
+        },
+        "llmResponse": {
+          "relevantFile": "services/paymentService.js",
+          "language": "javascript",
+          "suggestionContent": "O método `validateCreditCard` remove os espaços do número do cartão, mas não verifica se a string resultante contém apenas dígitos. Se o `cardNumber` contiver caracteres não numéricos (ex: '1234-5678-abcd-efgh'), `parseInt` resultará em `NaN` para esses caracteres. Isso fará com que o algoritmo de Luhn falhe e retorne `false`, mas de forma implícita. É mais robusto adicionar uma verificação explícita usando uma expressão regular (`/ˆ\\d+$/`) para garantir que a string limpa contenha apenas dígitos antes de prosseguir com o algoritmo.",
+          "existingCode": "    const cleaned = cardNumber.replace(/\\s/g, '');\n    \n    if (cleaned.length < 13 || cleaned.length > 19) {\n      return false;\n    }",
+          "improvedCode": "    const cleaned = cardNumber.replace(/\\s/g, '');\n\n    // Garante que a string contém apenas dígitos antes de validar o comprimento.\n    if (!/^\\d+$/.test(cleaned)) {\n      return false;\n    }\n    \n    if (cleaned.length < 13 || cleaned.length > 19) {\n      return false;\n    }",
+          "oneSentenceSummary": "A validação do cartão de crédito não rejeita explicitamente entradas não numéricas, tornando-a menos robusta.",
+          "relevantLinesStart": 77,
+          "relevantLinesEnd": 81,
+          "label": "potential_error"
+        },
+        "isMatch": true,
+        "similarity": 90,
+        "reasoning": "Ambos destacam que validateCreditCard não garante que a string contenha apenas dígitos, propondo checagem com regex antes do algoritmo de Luhn."
+      }
+    ],
+    "totalSuggestions": 2,
+    "matchedSuggestions": 1,
+    "accuracy": 50,
+    "detailedAnalysis": "O resumo do LLM só cobre um dos dois problemas críticos da ground truth (validação de dígitos) e introduz dois problemas adicionais (cálculo de desconto e uso de finally) que não fazem parte do ground truth. Assim, a correspondência global é parcial. Entre as sugestões específicas, apenas a verificação de dígitos no validateCreditCard coincide; a ausência de retorno em processPayment não foi identificada pelo LLM."
+  },
+  {
+    "testCase": "shopping_cart",
+    "overallMatch": false,
+    "overallSimilarity": 40,
+    "suggestionMatches": [
+      {
+        "groundTruth": {
+          "relevantFile": "components/ShoppingCart.jsx",
+          "language": "javascript",
+          "suggestionContent": "O useEffect que valida o código promocional é executado a cada mudança no input, causando uma requisição HTTP para cada caractere digitado. Isso pode sobrecarregar o servidor e criar uma experiência ruim para o usuário. Implemente debounce ou valide apenas quando o usuário terminar de digitar (blur) ou clicar em um botão.",
+          "existingCode": "useEffect(() => {\n  if (promoCode) {\n    validatePromoCode(promoCode);\n  }\n}, [promoCode]);",
+          "improvedCode": "useEffect(() => {\n  if (promoCode) {\n    const timeoutId = setTimeout(() => {\n      validatePromoCode(promoCode);\n    }, 500);\n    \n    return () => clearTimeout(timeoutId);\n  }\n}, [promoCode]);",
+          "oneSentenceSummary": "Implemente debounce no useEffect para evitar validações excessivas do código promocional",
+          "relevantLinesStart": 12,
+          "relevantLinesEnd": 16,
+          "label": "potential_error"
+        },
+        "llmResponse": {
+          "relevantFile": "components/ShoppingCart.jsx",
+          "language": "javascript",
+          "suggestionContent": "A função `validatePromoCode` é chamada dentro de um `useEffect` a cada mudança no `promoCode`. Se o usuário digitar rapidamente, múltiplas chamadas à API podem ser disparadas. Devido à natureza assíncrona da rede, uma resposta mais antiga pode chegar depois de uma mais nova, resultando na aplicação de um desconto incorreto (uma condição de corrida). Para corrigir isso, devemos cancelar a requisição anterior sempre que uma nova for iniciada. Isso pode ser feito usando um `AbortController`, que é passado para a função `fetch` e é acionado na função de limpeza do `useEffect`. Adicionalmente, é uma boa prática usar 'debouncing' para evitar chamadas à API a cada tecla pressionada, mas a correção da condição de corrida é o mais crítico.",
+          "existingCode": "useEffect(() => {\n    if (promoCode) {\n      validatePromoCode(promoCode);\n    }\n  }, [promoCode]);\n\n  const validatePromoCode = async (code) => {\n    setIsLoading(true);\n    try {\n      const response = await fetch(`/api/promo/validate?code=${code}`);\n      const data = await response.json();\n      \n      if (data.valid) {\n        setDiscount(data.discountPercentage);\n      } else {\n        setDiscount(0);\n      }\n    } catch (error) {\n      console.error('Error validating promo code:', error);\n      setDiscount(0);\n    }\n    setIsLoading(false);\n  };",
+          "improvedCode": "useEffect(() => {\n    // Ignora a validação se o código promocional estiver vazio.\n    if (!promoCode) {\n        setDiscount(0);\n        return;\n    }\n\n    const controller = new AbortController();\n    const signal = controller.signal;\n\n    const validatePromoCode = async (code) => {\n        setIsLoading(true);\n        try {\n            const response = await fetch(`/api/promo/validate?code=${code}`, { signal });\n            // Não continua se a requisição foi abortada\n            if (signal.aborted) return;\n\n            const data = await response.json();\n            \n            if (data.valid) {\n                setDiscount(data.discountPercentage);\n            } else {\n                setDiscount(0);\n            }\n        } catch (error) {\n            if (error.name !== 'AbortError') {\n                console.error('Error validating promo code:', error);\n                setDiscount(0);\n            }\n        } finally {\n            // Garante que o loading só termine para a requisição que não foi abortada\n            if (!signal.aborted) {\n              setIsLoading(false);\n            }\n        }\n    };\n\n    validatePromoCode(promoCode);\n\n    // Função de limpeza para abortar a requisição anterior\n    return () => {\n        controller.abort();\n    };\n}, [promoCode]);",
+          "oneSentenceSummary": "Há uma condição de corrida na validação do código promocional que pode resultar em um estado de desconto incorreto.",
+          "relevantLinesStart": 12,
+          "relevantLinesEnd": 34,
+          "label": "potential_error"
+        },
+        "isMatch": true,
+        "similarity": 70,
+        "reasoning": "Ambos apontam que o useEffect dispara várias requisições enquanto o usuário digita. O ground-truth foca no excesso de requisições (debounce); o LLM enfatiza a condição de corrida e abortar requisições, mas reconhece o problema de múltiplas chamadas e menciona debounce como boa prática. Problema central coincide."
+      },
+      {
+        "groundTruth": {
+          "relevantFile": "components/ShoppingCart.jsx",
+          "language": "javascript",
+          "suggestionContent": "No input de quantidade, parseInt(e.target.value) retornará NaN se o usuário apagar todo o conteúdo ou inserir texto não numérico. Quando NaN é passado para handleQuantityChange, a condição newQuantity >= 0 é false (pois NaN >= 0 é false), então nada acontece, mas o input mostra NaN para o usuário.",
+          "existingCode": "onChange={(e) => handleQuantityChange(item.id, parseInt(e.target.value))}",
+          "improvedCode": "onChange={(e) => {\n  const value = parseInt(e.target.value);\n  handleQuantityChange(item.id, isNaN(value) ? 0 : value);\n}}",
+          "oneSentenceSummary": "Trate o caso de NaN ao converter o valor do input para número",
+          "relevantLinesStart": 117,
+          "relevantLinesEnd": 117,
+          "label": "potential_error"
+        },
+        "llmResponse": null,
+        "isMatch": false,
+        "similarity": 0,
+        "reasoning": "O ground-truth trata do risco de parseInt gerar NaN no input de quantidade. O LLM não menciona esse problema."
+      },
+      {
+        "groundTruth": {
+          "relevantFile": "components/ShoppingCart.jsx",
+          "language": "javascript",
+          "suggestionContent": "O método handleRemoveItem busca o item no array mas não verifica se ele foi encontrado antes de acessar item.name. Se o item não existir (por exemplo, se foi removido em outra aba), o código tentará acessar a propriedade name de undefined, causando um erro.",
+          "existingCode": "const handleRemoveItem = (itemId) => {\n  const item = cartItems.find(item => item.id === itemId);\n  if (window.confirm(`Remove ${item.name} from cart?`)) {\n    dispatch(removeItem(itemId));\n  }\n};",
+          "improvedCode": "const handleRemoveItem = (itemId) => {\n  const item = cartItems.find(item => item.id === itemId);\n  if (!item) {\n    return;\n  }\n  if (window.confirm(`Remove ${item.name} from cart?`)) {\n    dispatch(removeItem(itemId));\n  }\n};",
+          "oneSentenceSummary": "Verifique se o item existe antes de acessar suas propriedades em handleRemoveItem",
+          "relevantLinesStart": 54,
+          "relevantLinesEnd": 59,
+          "label": "potential_error"
+        },
+        "llmResponse": null,
+        "isMatch": false,
+        "similarity": 0,
+        "reasoning": "O ground-truth destaca a necessidade de verificar se o item existe antes de acessar propriedades em handleRemoveItem. O LLM não aborda este ponto."
+      }
+    ],
+    "totalSuggestions": 3,
+    "matchedSuggestions": 1,
+    "accuracy": 33,
+    "detailedAnalysis": "O resumo do LLM não cobre dois dos três problemas listados no ground-truth (NaN no parseInt e verificação de item antes de acessar propriedades). Ele introduz um problema extra de performance com useMemo que não consta no ground-truth. Apenas a questão do efeito da validação do código promocional aparece em ambas as análises, ainda que com ênfase diferente (debounce vs race condition). Portanto, apenas 1 de 3 sugestões corresponde."
+  },
+  {
+    "testCase": "task_queue",
+    "overallMatch": false,
+    "overallSimilarity": 50,
+    "suggestionMatches": [
+      {
+        "groundTruth": {
+          "relevantFile": "services/TaskQueueProcessor.js",
+          "language": "javascript",
+          "suggestionContent": "No finally block de processNext, this.processNext() é chamado sem await dentro de um loop condicional. Isso pode causar múltiplas tarefas sendo processadas simultaneamente além do limite de concorrência, pois cada chamada inicia imediatamente sem esperar a anterior completar.",
+          "existingCode": "} finally {\n  const index = this.active.indexOf(task);\n  if (index > -1) {\n    this.active.splice(index, 1);\n  }\n  \n  if (this.queue.length > 0) {\n    this.processNext();\n  }\n}",
+          "improvedCode": "} finally {\n  const index = this.active.indexOf(task);\n  if (index > -1) {\n    this.active.splice(index, 1);\n  }\n  \n  // Use setImmediate or process.nextTick to avoid stack overflow\n  if (this.queue.length > 0) {\n    setImmediate(() => this.processNext());\n  }\n}",
+          "oneSentenceSummary": "Use setImmediate para evitar processamento simultâneo além do limite de concorrência",
+          "relevantLinesStart": 86,
+          "relevantLinesEnd": 94,
+          "label": "potential_error"
+        },
+        "llmResponse": null,
+        "isMatch": false,
+        "similarity": 0,
+        "reasoning": "O LLM não menciona o problema de concorrência em processNext; portanto não há correspondência."
+      },
+      {
+        "groundTruth": {
+          "relevantFile": "services/TaskQueueProcessor.js",
+          "language": "javascript",
+          "suggestionContent": "O método use() adiciona funções diretamente ao array middleware, mas runMiddleware espera objetos com propriedades phase e fn. Isso causará erro quando tentar acessar middleware.phase, pois middleware será uma função, não um objeto.",
+          "existingCode": "use(middlewareFn) {\n  this.middleware.push(middlewareFn);\n}\n\n// ...\n\nasync runMiddleware(task, phase) {\n  for (const middleware of this.middleware) {\n    if (middleware.phase === phase) {\n      await middleware.fn(task);\n    }\n  }\n}",
+          "improvedCode": "use(phase, middlewareFn) {\n  if (typeof middlewareFn !== 'function') {\n    throw new Error('Middleware must be a function');\n  }\n  this.middleware.push({ phase, fn: middlewareFn });\n}\n\n// ...\n\nasync runMiddleware(task, phase) {\n  for (const middleware of this.middleware) {\n    if (middleware.phase === phase) {\n      await middleware.fn(task);\n    }\n  }\n}",
+          "oneSentenceSummary": "Ajuste o método use para criar objetos com phase e fn conforme esperado por runMiddleware",
+          "relevantLinesStart": 31,
+          "relevantLinesEnd": 33,
+          "label": "potential_error"
+        },
+        "llmResponse": {
+          "relevantFile": "TaskQueueProcessor.js",
+          "language": "javascript",
+          "suggestionContent": "O método `use(middlewareFn)` armazena a função de middleware diretamente, mas o método `runMiddleware(task, phase)` espera um objeto com as propriedades `phase` e `fn`. Essa incompatibilidade causará um `TypeError` quando `runMiddleware` tentar acessar `middleware.phase`. O método `use` deve ser modificado para aceitar a fase e a função, armazenando-as no formato de objeto esperado, garantindo que o sistema de middleware funcione como projetado.",
+          "existingCode": "use(middlewareFn) {\n    this.middleware.push(middlewareFn);\n  }",
+          "improvedCode": "use(phase, fn) {\n    if (typeof fn !== 'function') {\n      throw new Error('Middleware function must be a function.');\n    }\n    const validPhases = ['beforeAdd', 'beforeProcess', 'afterProcess', 'afterFail'];\n    if (typeof phase !== 'string' || !validPhases.includes(phase)) {\n      throw new Error(`Middleware phase must be one of: ${validPhases.join(', ')}.`);\n    }\n    this.middleware.push({ phase, fn });\n  }",
+          "oneSentenceSummary": "A implementação do método `use` para adicionar middleware é incompatível com a forma como ele é executado, causando um erro em tempo de execução.",
+          "relevantLinesStart": 34,
+          "relevantLinesEnd": 36,
+          "label": "potential_error"
+        },
+        "isMatch": true,
+        "similarity": 90,
+        "reasoning": "Ambos descrevem que use() armazena funções enquanto runMiddleware espera objetos {phase, fn}, levando a TypeError."
+      },
+      {
+        "groundTruth": {
+          "relevantFile": "services/TaskQueueProcessor.js",
+          "language": "javascript",
+          "suggestionContent": "Em updateAverageTime, quando processingTimes está vazio ou tem menos de 100 itens no início, slice(-100) retorna um array vazio. Dividir por times.length (0) resulta em NaN, que será atribuído a averageTime, causando problemas em métricas e comparações.",
+          "existingCode": "updateAverageTime() {\n  const times = this.metrics.processingTimes.slice(-100);\n  const sum = times.reduce((acc, time) => acc + time, 0);\n  this.metrics.averageTime = sum / times.length;\n}",
+          "improvedCode": "updateAverageTime() {\n  const times = this.metrics.processingTimes.slice(-100);\n  if (times.length === 0) {\n    this.metrics.averageTime = 0;\n    return;\n  }\n  const sum = times.reduce((acc, time) => acc + time, 0);\n  this.metrics.averageTime = sum / times.length;\n}",
+          "oneSentenceSummary": "Adicione verificação para array vazio antes de calcular média para evitar NaN",
+          "relevantLinesStart": 166,
+          "relevantLinesEnd": 170,
+          "label": "potential_error"
+        },
+        "llmResponse": {
+          "relevantFile": "TaskQueueProcessor.js",
+          "language": "javascript",
+          "suggestionContent": "A função `updateAverageTime` calcula o tempo médio de processamento dividindo a soma dos tempos pelo número de registros. Se o array `processingTimes` estiver vazio (por exemplo, no início), isso resultará em uma divisão por zero (`0 / 0`), que produz `NaN`. Esse valor `NaN` irá então poluir o objeto de métricas. Uma verificação deve ser adicionada para garantir que, se não houver tempos de processamento, a média seja definida como 0.",
+          "existingCode": "updateAverageTime() {\n    const times = this.metrics.processingTimes.slice(-100);\n    const sum = times.reduce((acc, time) => acc + time, 0);\n    this.metrics.averageTime = sum / times.length;\n  }",
+          "improvedCode": "updateAverageTime() {\n    const times = this.metrics.processingTimes.slice(-100);\n    if (times.length === 0) {\n        this.metrics.averageTime = 0;\n        return;\n    }\n    const sum = times.reduce((acc, time) => acc + time, 0);\n    this.metrics.averageTime = sum / times.length;\n  }",
+          "oneSentenceSummary": "O cálculo da média de tempo pode resultar em `NaN` devido a uma divisão por zero se não houver tarefas processadas.",
+          "relevantLinesStart": 159,
+          "relevantLinesEnd": 163,
+          "label": "potential_error"
+        },
+        "isMatch": true,
+        "similarity": 90,
+        "reasoning": "Ambos apontam que updateAverageTime pode dividir por zero quando o array está vazio, resultando em NaN."
+      }
+    ],
+    "totalSuggestions": 3,
+    "matchedSuggestions": 2,
+    "accuracy": 66.67,
+    "detailedAnalysis": "O resumo do LLM coincide parcialmente: cobre o bug do middleware e o cálculo de média, mas omite o bug de concorrência em processNext e introduz um problema de performance em addBatch não presente no ground truth. Assim, há semelhança moderada mas não equivalência total. Duas das três sugestões essenciais batem; a de concorrência ficou ausente."
+  },
+  {
+    "testCase": "user_profile",
+    "overallMatch": false,
+    "overallSimilarity": 10,
+    "suggestionMatches": [
+      {
+        "groundTruth": {
+          "relevantFile": "components/UserProfile.jsx",
+          "language": "javascript",
+          "suggestionContent": "Ao usar PATCH, o servidor geralmente retorna apenas os campos atualizados, não o objeto completo. Definir originalProfile com response.data parcial quebrará futuras comparações e o handleCancel restaurará dados incompletos. É necessário mesclar a resposta com o estado atual ou garantir que o servidor retorne o objeto completo.",
+          "existingCode": "const response = await api.patch(`/users/${user.id}/profile`, updates);\n\nsetOriginalProfile(response.data);\nupdateUser(response.data);",
+          "improvedCode": "const response = await api.patch(`/users/${user.id}/profile`, updates);\n\n// Merge the response with current profile to ensure complete data\nconst updatedProfile = { ...profile, ...response.data };\nsetOriginalProfile(updatedProfile);\nsetProfile(updatedProfile);\nupdateUser(updatedProfile);",
+          "oneSentenceSummary": "Mescle a resposta do PATCH com o perfil atual para evitar perda de dados",
+          "relevantLinesStart": 125,
+          "relevantLinesEnd": 128,
+          "label": "potential_error"
+        },
+        "llmResponse": null,
+        "isMatch": false,
+        "similarity": 0,
+        "reasoning": "Ground truth trata de perda de dados ao salvar a resposta parcial do PATCH; LLM não menciona nada relacionado a PATCH ou mesclagem de dados, focando em verificação de user.id."
+      },
+      {
+        "groundTruth": {
+          "relevantFile": "components/UserProfile.jsx",
+          "language": "javascript",
+          "suggestionContent": "O método handleCancel tenta restaurar originalProfile sem verificar se ele existe. Se o usuário clicar em Cancel antes do perfil carregar completamente, setProfile(originalProfile) definirá o perfil como null, quebrando todos os inputs do formulário.",
+          "existingCode": "const handleCancel = () => {\n  setProfile(originalProfile);\n  setErrors({});\n};",
+          "improvedCode": "const handleCancel = () => {\n  if (originalProfile) {\n    setProfile(originalProfile);\n    setErrors({});\n  }\n};",
+          "oneSentenceSummary": "Verifique se originalProfile existe antes de restaurar no handleCancel",
+          "relevantLinesStart": 139,
+          "relevantLinesEnd": 142,
+          "label": "potential_error"
+        },
+        "llmResponse": null,
+        "isMatch": false,
+        "similarity": 0,
+        "reasoning": "Ground truth discute falta de verificação de existência de originalProfile no handleCancel; LLM não aborda essa função nem problema semelhante."
+      },
+      {
+        "groundTruth": {
+          "relevantFile": "components/UserProfile.jsx",
+          "language": "javascript",
+          "suggestionContent": "Usar JSON.stringify para comparar objetos pode retornar false positivos se as propriedades estiverem em ordem diferente. Além disso, comparar notifications com JSON.stringify é redundante já que o objeto completo já está sendo comparado. Isso pode fazer o usuário pensar que há mudanças quando não há.",
+          "existingCode": "const hasChanges = () => {\n  if (!originalProfile) return false;\n  \n  const currentStr = JSON.stringify(profile);\n  const originalStr = JSON.stringify(originalProfile);\n  \n  return currentStr !== originalStr;\n};",
+          "improvedCode": "const hasChanges = () => {\n  if (!originalProfile) return false;\n  \n  return (\n    profile.name !== originalProfile.name ||\n    profile.email !== originalProfile.email ||\n    profile.phone !== originalProfile.phone ||\n    profile.bio !== originalProfile.bio ||\n    profile.notifications.email !== originalProfile.notifications.email ||\n    profile.notifications.sms !== originalProfile.notifications.sms ||\n    profile.notifications.push !== originalProfile.notifications.push\n  );\n};",
+          "oneSentenceSummary": "Compare campos individualmente ao invés de usar JSON.stringify para detectar mudanças",
+          "relevantLinesStart": 93,
+          "relevantLinesEnd": 100,
+          "label": "potential_error"
+        },
+        "llmResponse": null,
+        "isMatch": false,
+        "similarity": 0,
+        "reasoning": "Ground truth critica uso de JSON.stringify para comparar objetos; LLM não menciona comparação de objetos, focando em condição de corrida ao atualizar errors."
+      }
+    ],
+    "totalSuggestions": 3,
+    "matchedSuggestions": 0,
+    "accuracy": 0,
+    "detailedAnalysis": "O resumo do LLM descreve problemas diferentes dos indicados no ground truth (dados de autenticação nulos e condição de corrida em setState vs problemas de PATCH, handleCancel e comparação de objetos). Nenhuma das três sugestões essenciais coincide entre as análises, resultando em zero correspondências."
+  }
+]

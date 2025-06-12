@@ -1,0 +1,38 @@
+{
+  "overallSummary": "Este PR adiciona um componente de carrinho de compras com funcionalidades de gerenciamento de itens, validação de códigos promocionais e cálculo de totais. Foram identificados três problemas: o useEffect valida códigos promocionais a cada digitação causando excesso de requisições, handleQuantityChange com parseInt pode resultar em NaN, e handleRemoveItem não verifica se o item existe antes de acessar suas propriedades.",
+  "codeSuggestions": [
+    {
+      "relevantFile": "components/ShoppingCart.jsx",
+      "language": "javascript",
+      "suggestionContent": "O useEffect que valida o código promocional é executado a cada mudança no input, causando uma requisição HTTP para cada caractere digitado. Isso pode sobrecarregar o servidor e criar uma experiência ruim para o usuário. Implemente debounce ou valide apenas quando o usuário terminar de digitar (blur) ou clicar em um botão.",
+      "existingCode": "useEffect(() => {\n  if (promoCode) {\n    validatePromoCode(promoCode);\n  }\n}, [promoCode]);",
+      "improvedCode": "useEffect(() => {\n  if (promoCode) {\n    const timeoutId = setTimeout(() => {\n      validatePromoCode(promoCode);\n    }, 500);\n    \n    return () => clearTimeout(timeoutId);\n  }\n}, [promoCode]);",
+      "oneSentenceSummary": "Implemente debounce no useEffect para evitar validações excessivas do código promocional",
+      "relevantLinesStart": 12,
+      "relevantLinesEnd": 16,
+      "label": "potential_error"
+    },
+    {
+      "relevantFile": "components/ShoppingCart.jsx",
+      "language": "javascript",
+      "suggestionContent": "No input de quantidade, parseInt(e.target.value) retornará NaN se o usuário apagar todo o conteúdo ou inserir texto não numérico. Quando NaN é passado para handleQuantityChange, a condição newQuantity >= 0 é false (pois NaN >= 0 é false), então nada acontece, mas o input mostra NaN para o usuário.",
+      "existingCode": "onChange={(e) => handleQuantityChange(item.id, parseInt(e.target.value))}",
+      "improvedCode": "onChange={(e) => {\n  const value = parseInt(e.target.value);\n  handleQuantityChange(item.id, isNaN(value) ? 0 : value);\n}}",
+      "oneSentenceSummary": "Trate o caso de NaN ao converter o valor do input para número",
+      "relevantLinesStart": 117,
+      "relevantLinesEnd": 117,
+      "label": "potential_error"
+    },
+    {
+      "relevantFile": "components/ShoppingCart.jsx",
+      "language": "javascript",
+      "suggestionContent": "O método handleRemoveItem busca o item no array mas não verifica se ele foi encontrado antes de acessar item.name. Se o item não existir (por exemplo, se foi removido em outra aba), o código tentará acessar a propriedade name de undefined, causando um erro.",
+      "existingCode": "const handleRemoveItem = (itemId) => {\n  const item = cartItems.find(item => item.id === itemId);\n  if (window.confirm(`Remove ${item.name} from cart?`)) {\n    dispatch(removeItem(itemId));\n  }\n};",
+      "improvedCode": "const handleRemoveItem = (itemId) => {\n  const item = cartItems.find(item => item.id === itemId);\n  if (!item) {\n    return;\n  }\n  if (window.confirm(`Remove ${item.name} from cart?`)) {\n    dispatch(removeItem(itemId));\n  }\n};",
+      "oneSentenceSummary": "Verifique se o item existe antes de acessar suas propriedades em handleRemoveItem",
+      "relevantLinesStart": 54,
+      "relevantLinesEnd": 59,
+      "label": "potential_error"
+    }
+  ]
+} 

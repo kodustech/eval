@@ -1,0 +1,90 @@
+## file: 'components/UserProfile.jsx'
+
+@@ -23,10 +23,11 @@
+   const [errors, setErrors] = useState({});
+ 
+   useEffect(() => {
+-    if (user?.id) {
+-      loadProfile();
+-    }
+-  }, [user?.id]);
++    loadProfile();
++  }, [user.id]);
+ 
+   const loadProfile = async () => {
+     try {
+@@ -90,15 +91,25 @@
+     setErrors(newErrors);
+   };
+ 
+-  const hasChanges = () => {
+-    return JSON.stringify(profile) !== JSON.stringify(originalProfile);
+-  };
++  const hasChanges = () => {
++    if (!originalProfile) return false;
++    
++    const currentStr = JSON.stringify(profile);
++    const originalStr = JSON.stringify(originalProfile);
++    
++    return currentStr !== originalStr;
++  };
+ 
+   const handleSave = async () => {
+     if (Object.keys(errors).length > 0) {
+       return;
+     }
+ 
++    setSaving(true);
++    
+     try {
+-      const response = await api.put(`/users/${user.id}/profile`, profile);
++      const updates = {};
++      
++      if (profile.name !== originalProfile.name) {
++        updates.name = profile.name;
++      }
++      if (profile.email !== originalProfile.email) {
++        updates.email = profile.email;
++      }
++      if (profile.phone !== originalProfile.phone) {
++        updates.phone = profile.phone;
++      }
++      if (profile.bio !== originalProfile.bio) {
++        updates.bio = profile.bio;
++      }
++      if (JSON.stringify(profile.notifications) !== JSON.stringify(originalProfile.notifications)) {
++        updates.notifications = profile.notifications;
++      }
++
++      const response = await api.patch(`/users/${user.id}/profile`, updates);
+       
+       setOriginalProfile(response.data);
+@@ -142,5 +163,8 @@
+       alert('Profile updated successfully!');
+     } catch (error) {
+       console.error('Failed to update profile:', error);
+       alert('Failed to update profile. Please try again.');
++    } finally {
++      setSaving(false);
+     }
+   };
+ 
+@@ -234,7 +258,7 @@
+         <div className="form-actions">
+           <button
+             onClick={handleSave}
+-            disabled={!hasChanges() || Object.keys(errors).length > 0}
++            disabled={!hasChanges() || saving || Object.keys(errors).length > 0}
+             className="save-button"
+           >
+-            Save Changes
++            {saving ? 'Saving...' : 'Save Changes'}
+           </button>
+           
+           <button
+             onClick={handleCancel}
+-            disabled={!hasChanges()}
++            disabled={!hasChanges() || saving}
+             className="cancel-button"
+           >
+             Cancel

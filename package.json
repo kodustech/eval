@@ -1,0 +1,29 @@
+{
+  "name": "code-evaluator",
+  "version": "1.0.0",
+  "description": "Evaluator for code review suggestions",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "test": "npm run build && node dist/test.js",
+    "test:dev": "ts-node src/test.ts"
+  },
+  "keywords": ["evaluator", "code-review", "llm"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@google/genai": "^1.2.0",
+    "@anthropic-ai/sdk": "^0.24.0",
+    "openai": "^4.0.0",
+    "mime": "^4.0.0",
+    "dotenv": "^16.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/mime": "^3.0.0",
+    "typescript": "^5.0.0",
+    "ts-node": "^10.0.0"
+  }
+} 

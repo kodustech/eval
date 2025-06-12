@@ -1,0 +1,137 @@
+## file: 'utils/CacheService.js'
+
+@@ -0,0 +1,133 @@
+__new hunk__
+1 +class CacheService {
+2 +  constructor(maxSize = 100, ttlMinutes = 60) {
+3 +    this.cache = new Map();
+4 +    this.maxSize = maxSize;
+5 +    this.ttl = ttlMinutes * 60 * 1000;
+6 +    this.accessCount = new Map();
+7 +    this.startCleanupTimer();
+8 +  }
+9 +
+10 +  set(key, value, customTtl = null) {
+11 +    const expiresAt = Date.now() + (customTtl || this.ttl);
+12 +    
+13 +    if (this.cache.size >= this.maxSize && !this.cache.has(key)) {
+14 +      this.evictLeastUsed();
+15 +    }
+16 +
+17 +    this.cache.set(key, {
+18 +      value,
+19 +      expiresAt,
+20 +      createdAt: Date.now()
+21 +    });
+22 +
+23 +    this.accessCount.set(key, 0);
+24 +  }
+25 +
+26 +  get(key) {
+27 +    const item = this.cache.get(key);
+28 +    
+29 +    if (!item) {
+30 +      return null;
+31 +    }
+32 +
+33 +    if (Date.now() > item.expiresAt) {
+34 +      this.cache.delete(key);
+35 +      this.accessCount.delete(key);
+36 +      return null;
+37 +    }
+38 +
+39 +    const currentCount = this.accessCount.get(key) || 0;
+40 +    this.accessCount.set(key, currentCount + 1);
+41 +    
+42 +    return item.value;
+43 +  }
+44 +
+45 +  has(key) {
+46 +    const item = this.cache.get(key);
+47 +    
+48 +    if (!item || Date.now() > item.expiresAt) {
+49 +      return false;
+50 +    }
+51 +    
+52 +    return true;
+53 +  }
+54 +
+55 +  delete(key) {
+56 +    this.cache.delete(key);
+57 +    this.accessCount.delete(key);
+58 +  }
+59 +
+60 +  clear() {
+61 +    this.cache.clear();
+62 +    this.accessCount.clear();
+63 +  }
+64 +
+65 +  evictLeastUsed() {
+66 +    let minCount = Infinity;
+67 +    let keyToEvict = null;
+68 +
+69 +    for (const [key, count] of this.accessCount.entries()) {
+70 +      if (count < minCount) {
+71 +        minCount = count;
+72 +        keyToEvict = key;
+73 +      }
+74 +    }
+75 +
+76 +    if (keyToEvict) {
+77 +      this.cache.delete(keyToEvict);
+78 +      this.accessCount.delete(keyToEvict);
+79 +    }
+80 +  }
+81 +
+82 +  startCleanupTimer() {
+83 +    setInterval(() => {
+84 +      const now = Date.now();
+85 +      
+86 +      for (const [key, item] of this.cache.entries()) {
+87 +        if (now > item.expiresAt) {
+88 +          this.cache.delete(key);
+89 +          this.accessCount.delete(key);
+90 +        }
+91 +      }
+92 +    }, 60000);
+93 +  }
+94 +
+95 +  getStats() {
+96 +    const validItems = [];
+97 +    const now = Date.now();
+98 +
+99 +    for (const [key, item] of this.cache.entries()) {
+100 +      if (now <= item.expiresAt) {
+101 +        validItems.push({
+102 +          key,
+103 +          size: JSON.stringify(item.value).length,
+104 +          accessCount: this.accessCount.get(key),
+105 +          age: now - item.createdAt
+106 +        });
+107 +      }
+108 +    }
+109 +
+110 +    return {
+111 +      totalItems: validItems.length,
+112 +      totalSize: validItems.reduce((sum, item) => sum + item.size, 0),
+113 +      avgAccessCount: validItems.reduce((sum, item) => sum + item.accessCount, 0) / validItems.length,
+114 +      items: validItems.sort((a, b) => b.accessCount - a.accessCount)
+115 +    };
+116 +  }
+117 +
+118 +  memoize(fn, keyGenerator = (...args) => JSON.stringify(args)) {
+119 +    return (...args) => {
+120 +      const key = keyGenerator(...args);
+121 +      
+122 +      if (this.has(key)) {
+123 +        return this.get(key);
+124 +      }
+125 +
+126 +      const result = fn(...args);
+127 +      this.set(key, result);
+128 +      return result;
+129 +    };
+130 +  }
+131 +}
+132 +
+133 +module.exports = CacheService; 

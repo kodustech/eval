@@ -1,0 +1,134 @@
+## file: 'services/TaskQueueProcessor.js'
+
+@@ -48,8 +48,11 @@
+ 
++    await this.runMiddleware(enhancedTask, 'beforeAdd');
++    
+    this.queue.push(enhancedTask);
+    
+-    this.processNext();
++    if (!this.paused && this.active.length < this.concurrency) {
++      this.processNext();
++    }
+
+    return enhancedTask.id;
+@@ -57,12 +60,17 @@
+  }
+
+  async addBatch(tasks) {
+-    const promises = tasks.map(task => this.addTask(task));
+-    return Promise.all(promises);
++    const taskIds = [];
++    
++    for (const task of tasks) {
++      try {
++        const id = await this.addTask(task);
++        taskIds.push(id);
++      } catch (error) {
++        console.error(`Failed to add task:`, error);
++      }
++    }
++    
++    return taskIds;
+  }
+
+  async processNext() {
+@@ -74,8 +82,16 @@
+    const task = this.queue.shift();
+    this.active.push(task);
+
+-    await this.processTask(task);
+-    this.active = this.active.filter(t => t.id !== task.id);
++    try {
++      await this.processTask(task);
++    } finally {
++      const index = this.active.indexOf(task);
++      if (index > -1) {
++        this.active.splice(index, 1);
++      }
++      
++      if (this.queue.length > 0) {
++        this.processNext();
++      }
++    }
+  }
+
+@@ -101,7 +117,10 @@
+    task.startedAt = Date.now();
+
+    try {
+-      const result = await handler(task.data);
++      await this.runMiddleware(task, 'beforeProcess');
++
++      const timeoutPromise = new Promise((_, reject) => {
++        setTimeout(() => reject(new Error('Task timeout')), this.timeout);
++      });
++
++      const result = await Promise.race([
++        handler(task.data),
++        timeoutPromise
++      ]);
+
+      task.status = 'completed';
+@@ -111,6 +130,8 @@
+      const processingTime = task.completedAt - task.startedAt;
+      this.metrics.processingTimes.push(processingTime);
+      this.metrics.totalProcessed++;
+-     this.metrics.averageTime = this.calculateAverageTime();
++     this.updateAverageTime();
++      
++      await this.runMiddleware(task, 'afterProcess');
+      
+      this.completed.push(task);
+@@ -125,8 +146,11 @@
+      if (task.attempts < this.retryLimit) {
+        task.status = 'pending';
+-       // Re-add to queue for retry
+-       this.queue.unshift(task);
++       setTimeout(() => {
++         this.queue.unshift(task);
++         if (!this.paused && this.active.length < this.concurrency) {
++           this.processNext();
++         }
++       }, this.retryDelay * task.attempts);
+      } else {
+        task.status = 'failed';
+@@ -134,15 +158,26 @@
+        this.failed.push(task);
+        this.metrics.totalFailed++;
++        
++        await this.runMiddleware(task, 'afterFail');
+      }
+    }
+  }
+
+- calculateAverageTime() {
+-   if (this.metrics.processingTimes.length === 0) return 0;
+-   
+-   const sum = this.metrics.processingTimes.reduce((acc, time) => acc + time, 0);
+-   return sum / this.metrics.processingTimes.length;
++ async runMiddleware(task, phase) {
++   for (const middleware of this.middleware) {
++     if (middleware.phase === phase) {
++       await middleware.fn(task);
++     }
++   }
++ }
++
++ updateAverageTime() {
++   const times = this.metrics.processingTimes.slice(-100);
++   const sum = times.reduce((acc, time) => acc + time, 0);
++   this.metrics.averageTime = sum / times.length;
++ }
++
+  pause() {
+@@ -154,7 +189,7 @@
+    this.paused = false;
+    
+-   // Process any pending tasks up to concurrency limit
+-   while (this.active.length < this.concurrency && this.queue.length > 0) {
++   const availableSlots = this.concurrency - this.active.length;
++   for (let i = 0; i < availableSlots && i < this.queue.length; i++) {
+     this.processNext();
+   }
+ } 
