@@ -1,191 +1,6 @@
 ## Example 002 - Shopping Cart Component
 
-### file.js
-```javascript
-import React, { useState, useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { updateQuantity, removeItem } from '../store/cartSlice';
-
-const ShoppingCart = ({ onCheckout }) => {
-  const dispatch = useDispatch();
-  const cartItems = useSelector(state => state.cart.items);
-  const [promoCode, setPromoCode] = useState('');
-  const [discount, setDiscount] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    if (promoCode) {
-      validatePromoCode(promoCode);
-    }
-  }, [promoCode]);
-
-  const validatePromoCode = async (code) => {
-    setIsLoading(true);
-    try {
-      const response = await fetch(`/api/promo/validate?code=${code}`);
-      const data = await response.json();
-      
-      if (data.valid) {
-        setDiscount(data.discountPercentage);
-      } else {
-        setDiscount(0);
-      }
-    } catch (error) {
-      console.error('Error validating promo code:', error);
-      setDiscount(0);
-    }
-    setIsLoading(false);
-  };
-
-  const calculateSubtotal = () => {
-    return cartItems.reduce((total, item) => {
-      return total + (item.price * item.quantity);
-    }, 0);
-  };
-
-  const calculateTotal = () => {
-    const subtotal = calculateSubtotal();
-    const discountAmount = subtotal * (discount / 100);
-    return subtotal - discountAmount;
-  };
-
-  const handleQuantityChange = (itemId, newQuantity) => {
-    if (newQuantity >= 0) {
-      dispatch(updateQuantity({ id: itemId, quantity: newQuantity }));
-    }
-  };
-
-  const handleRemoveItem = (itemId) => {
-    const item = cartItems.find(item => item.id === itemId);
-    if (window.confirm(`Remove ${item.name} from cart?`)) {
-      dispatch(removeItem(itemId));
-    }
-  };
-
-  const formatPrice = (price) => {
-    return `$${price.toFixed(2)}`;
-  };
-
-  const getStockStatus = (item) => {
-    if (item.stock === 0) {
-      return { message: 'Out of stock', canPurchase: false };
-    }
-    if (item.stock < item.quantity) {
-      return { message: `Only ${item.stock} available`, canPurchase: false };
-    }
-    if (item.stock <= 5) {
-      return { message: 'Low stock', canPurchase: true };
-    }
-    return { message: '', canPurchase: true };
-  };
-
-  const canCheckout = () => {
-    return cartItems.length > 0 && 
-           cartItems.every(item => getStockStatus(item).canPurchase);
-  };
-
-  return (
-    <div className="shopping-cart">
-      <h2>Your Shopping Cart</h2>
-      
-      {cartItems.length === 0 ? (
-        <p className="empty-cart">Your cart is empty</p>
-      ) : (
-        <>
-          <div className="cart-items">
-            {cartItems.map(item => {
-              const stockStatus = getStockStatus(item);
-              
-              return (
-                <div key={item.id} className="cart-item">
-                  <img src={item.image} alt={item.name} />
-                  <div className="item-details">
-                    <h3>{item.name}</h3>
-                    <p className="price">{formatPrice(item.price)}</p>
-                    {stockStatus.message && (
-                      <p className={`stock-status ${stockStatus.canPurchase ? 'warning' : 'error'}`}>
-                        {stockStatus.message}
-                      </p>
-                    )}
-                  </div>
-                  <div className="quantity-controls">
-                    <button 
-                      onClick={() => handleQuantityChange(item.id, item.quantity - 1)}
-                      disabled={item.quantity === 0}
-                    >
-                      -
-                    </button>
-                    <input 
-                      type="number" 
-                      value={item.quantity}
-                      onChange={(e) => handleQuantityChange(item.id, parseInt(e.target.value))}
-                      min="0"
-                    />
-                    <button 
-                      onClick={() => handleQuantityChange(item.id, item.quantity + 1)}
-                      disabled={item.quantity >= item.stock}
-                    >
-                      +
-                    </button>
-                  </div>
-                  <button 
-                    className="remove-btn"
-                    onClick={() => handleRemoveItem(item.id)}
-                  >
-                    Remove
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="cart-summary">
-            <div className="promo-code">
-              <input 
-                type="text"
-                placeholder="Enter promo code"
-                value={promoCode}
-                onChange={(e) => setPromoCode(e.target.value)}
-                disabled={isLoading}
-              />
-              {isLoading && <span>Validating...</span>}
-            </div>
-
-            <div className="totals">
-              <div className="subtotal">
-                <span>Subtotal:</span>
-                <span>{formatPrice(calculateSubtotal())}</span>
-              </div>
-              {discount > 0 && (
-                <div className="discount">
-                  <span>Discount ({discount}%):</span>
-                  <span>-{formatPrice(calculateSubtotal() * (discount / 100))}</span>
-                </div>
-              )}
-              <div className="total">
-                <span>Total:</span>
-                <span>{formatPrice(calculateTotal())}</span>
-              </div>
-            </div>
-
-            <button 
-              className="checkout-btn"
-              onClick={() => onCheckout(calculateTotal())}
-              disabled={!canCheckout()}
-            >
-              Proceed to Checkout
-            </button>
-          </div>
-        </>
-      )}
-    </div>
-  );
-};
-
-export default ShoppingCart;
-```
-
-### diff.txt
+### diff
 ```diff
 ## file: 'components/ShoppingCart.jsx'
 
@@ -374,6 +189,147 @@ __new hunk__
 181 +export default ShoppingCart;
 ```
 
+### files
+```
+<!-- components/ShoppingCart.jsx -->
+<- CUT CONTENT ->
+12:   useEffect(() => {
+13:     if (promoCode) {
+14:       validatePromoCode(promoCode);
+15:     }
+16:   }, [promoCode]);
+<- CUT CONTENT ->
+48:   const handleQuantityChange = (itemId, newQuantity) => {
+49:     if (newQuantity >= 0) {
+50:       dispatch(updateQuantity({ id: itemId, quantity: newQuantity }));
+51:     }
+52:   };
+53:
+54:   const handleRemoveItem = (itemId) => {
+55:     const item = cartItems.find(item => item.id === itemId);
+56:     if (window.confirm(`Remove ${item.name} from cart?`)) {
+57:       dispatch(removeItem(itemId));
+58:     }
+59:   };
+<- CUT CONTENT ->
+114:                     <input 
+115:                       type="number" 
+116:                       value={item.quantity}
+117:                       onChange={(e) => handleQuantityChange(item.id, parseInt(e.target.value))}
+118:                       min="0"
+119:                     />
+<- CUT CONTENT ->
+
+<!-- pages/CheckoutPage.jsx -->
+<- CUT CONTENT ->
+67: const CheckoutPage = () => {
+68:   const [checkoutData, setCheckoutData] = useState(null);
+69:   const navigate = useNavigate();
+70:   
+71:   const handleCartCheckout = (totalAmount) => {
+72:     setCheckoutData({
+73:       total: totalAmount,
+74:       timestamp: new Date().toISOString()
+75:     });
+76:     
+77:     navigate('/payment', { 
+78:       state: { amount: totalAmount, source: 'cart' }
+79:     });
+80:   };
+81:   
+82:   return (
+83:     <div className="checkout-page">
+84:       <ShoppingCart onCheckout={handleCartCheckout} />
+85:       <OrderSummary checkoutData={checkoutData} />
+86:     </div>
+87:   );
+88: };
+<- CUT CONTENT ->
+
+<!-- hooks/usePromoCode.js -->
+<- CUT CONTENT ->
+23: const usePromoCode = () => {
+24:   const [validationCache, setValidationCache] = useState({});
+25:   const [isValidating, setIsValidating] = useState(false);
+26:   
+27:   const validatePromoCode = useCallback(async (code) => {
+28:     if (validationCache[code]) {
+29:       return validationCache[code];
+30:     }
+31:     
+32:     setIsValidating(true);
+33:     try {
+34:       const response = await fetch(`/api/promo/validate?code=${code}`);
+35:       const data = await response.json();
+36:       
+37:       setValidationCache(prev => ({
+38:         ...prev,
+39:         [code]: data
+40:       }));
+41:       
+42:       return data;
+43:     } catch (error) {
+44:       console.error('Promo validation failed:', error);
+45:       return { valid: false };
+46:     } finally {
+47:       setIsValidating(false);
+48:     }
+49:   }, [validationCache]);
+<- CUT CONTENT ->
+
+<!-- components/ProductCard.jsx -->
+<- CUT CONTENT ->
+156: const ProductCard = ({ product }) => {
+157:   const dispatch = useDispatch();
+158:   
+159:   const handleAddToCart = () => {
+160:     const cartItem = {
+161:       id: product.id,
+162:       name: product.name,
+163:       price: product.price,
+164:       quantity: 1,
+165:       stock: product.stock
+166:     };
+167:     
+168:     dispatch(addToCart(cartItem));
+169:   };
+170:   
+171:   const handleQuickRemove = () => {
+172:     // Direct removal without confirmation - relies on ShoppingCart's handleRemoveItem
+173:     if (window.confirm(`Remove ${product.name}?`)) {
+174:       dispatch(removeItem(product.id));
+175:     }
+176:   };
+<- CUT CONTENT ->
+
+<!-- store/cartSlice.js -->
+<- CUT CONTENT ->
+89: const cartSlice = createSlice({
+90:   name: 'cart',
+91:   initialState: {
+92:     items: [],
+93:     totalItems: 0
+94:   },
+95:   reducers: {
+96:     updateQuantity: (state, action) => {
+97:       const { id, quantity } = action.payload;
+98:       const item = state.items.find(item => item.id === id);
+99:       
+100:       if (item && quantity >= 0) {
+101:         item.quantity = quantity;
+102:         state.totalItems = state.items.reduce((total, item) => total + item.quantity, 0);
+103:       }
+104:     },
+105:     removeItem: (state, action) => {
+106:       const itemId = action.payload;
+107:       state.items = state.items.filter(item => item.id !== itemId);
+108:       state.totalItems = state.items.reduce((total, item) => total + item.quantity, 0);
+109:     }
+110:   }
+111: });
+<- CUT CONTENT ->
+```
+
 ### suggestions.json
 ```json
 {
@@ -382,7 +338,7 @@ __new hunk__
         {
             "relevantFile": "components/ShoppingCart.jsx",
             "language": "javascript",
-            "suggestionContent": "O useEffect que valida o código promocional é executado a cada mudança no input, causando uma requisição HTTP para cada caractere digitado. Isso pode sobrecarregar o servidor e criar uma experiência ruim para o usuário. Implemente debounce ou valide apenas quando o usuário terminar de digitar (blur) ou clicar em um botão.",
+            "suggestionContent": "O useEffect que valida o código promocional é executado a cada mudança no input, causando uma requisição HTTP para cada caractere digitado. Isso pode sobrecarregar o servidor e criar uma experiência ruim para o usuário. O problema afeta também o usePromoCode hook (linha 27) que já implementa cache mas não consegue mitigar as chamadas excessivas vindas do ShoppingCart, e pode causar conflitos com o CheckoutPage (linha 71) que depende dos dados de desconto para calcular o total final.",
             "existingCode": "useEffect(() => {\n  if (promoCode) {\n    validatePromoCode(promoCode);\n  }\n}, [promoCode]);",
             "improvedCode": "useEffect(() => {\n  if (promoCode) {\n    const timeoutId = setTimeout(() => {\n      validatePromoCode(promoCode);\n    }, 500);\n    \n    return () => clearTimeout(timeoutId);\n  }\n}, [promoCode]);",
             "oneSentenceSummary": "Implemente debounce no useEffect para evitar validações excessivas do código promocional",
@@ -393,7 +349,7 @@ __new hunk__
         {
             "relevantFile": "components/ShoppingCart.jsx",
             "language": "javascript",
-            "suggestionContent": "No input de quantidade, parseInt(e.target.value) retornará NaN se o usuário apagar todo o conteúdo ou inserir texto não numérico. Quando NaN é passado para handleQuantityChange, a condição newQuantity >= 0 é false (pois NaN >= 0 é false), então nada acontece, mas o input mostra NaN para o usuário.",
+            "suggestionContent": "No input de quantidade, parseInt(e.target.value) retornará NaN se o usuário apagar todo o conteúdo ou inserir texto não numérico. Quando NaN é passado para handleQuantityChange, a condição newQuantity >= 0 é false (pois NaN >= 0 é false), então nada acontece, mas o input mostra NaN para o usuário. Isso quebra o Redux cartSlice (linha 100) que espera sempre receber números válidos, e pode causar inconsistências no ProductCard (linha 160) que confia na atualização correta das quantidades.",
             "existingCode": "onChange={(e) => handleQuantityChange(item.id, parseInt(e.target.value))}",
             "improvedCode": "onChange={(e) => {\n  const value = parseInt(e.target.value);\n  handleQuantityChange(item.id, isNaN(value) ? 0 : value);\n}}",
             "oneSentenceSummary": "Trate o caso de NaN ao converter o valor do input para número",
@@ -404,7 +360,7 @@ __new hunk__
         {
             "relevantFile": "components/ShoppingCart.jsx",
             "language": "javascript",
-            "suggestionContent": "O método handleRemoveItem busca o item no array mas não verifica se ele foi encontrado antes de acessar item.name. Se o item não existir (por exemplo, se foi removido em outra aba), o código tentará acessar a propriedade name de undefined, causando um erro.",
+            "suggestionContent": "O método handleRemoveItem busca o item no array mas não verifica se ele foi encontrado antes de acessar item.name. Se o item não existir (por exemplo, se foi removido em outra aba), o código tentará acessar a propriedade name de undefined, causando um erro. Isso também afeta o ProductCard (linha 173) que implementa lógica similar de remoção e pode quebrar quando múltiplos componentes tentam remover o mesmo item simultaneamente, e pode causar inconsistências no cartSlice (linha 107) que assume que os IDs passados sempre existem.",
             "existingCode": "const handleRemoveItem = (itemId) => {\n  const item = cartItems.find(item => item.id === itemId);\n  if (window.confirm(`Remove ${item.name} from cart?`)) {\n    dispatch(removeItem(itemId));\n  }\n};",
             "improvedCode": "const handleRemoveItem = (itemId) => {\n  const item = cartItems.find(item => item.id === itemId);\n  if (!item) {\n    return;\n  }\n  if (window.confirm(`Remove ${item.name} from cart?`)) {\n    dispatch(removeItem(itemId));\n  }\n};",
             "oneSentenceSummary": "Verifique se o item existe antes de acessar suas propriedades em handleRemoveItem",
